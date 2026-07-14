@@ -12,6 +12,17 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.2.2] — 2026-07-14
+
+### Changed — flat PDC-Demo layout
+
+- `install-pdc-demo.sh` now clones into a hidden `.pdc-policy-generator/`
+  and links the app **flat at the top level**: `PDC-Demo/policy_generator`
+  beside `glossary_generator`, `PDC-Demo/courseware` (into PDC-Scenarios),
+  and the app README kept separate as `README-Policy.md`. An existing
+  `PDC-Policy-Generator/` layout is migrated in place. The PDC-Scenarios
+  bootstraps (bash + PowerShell, which uses junctions) do the same.
+
 ## [1.2.1] — 2026-07-14
 
 ### Fixed

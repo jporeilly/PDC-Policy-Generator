@@ -89,18 +89,26 @@ curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main
 # or, from a checkout:  ./install-pdc-demo.sh [/path/to/PDC-Demo] [VERTICAL]
 ```
 
+The script produces a **flat layout**: the clone itself is hidden
+(`.pdc-policy-generator/`), and the top level gets `policy_generator/`
+(a link into it, beside `glossary_generator/`), `courseware/` (a link into
+PDC-Scenarios) and `README-Policy.md` (this repo's README, kept separate
+from the Glossary one). An older `PDC-Policy-Generator/` layout is migrated
+in place on the next run. Updating is `git -C ~/PDC-Demo/.pdc-policy-generator
+pull` — or just re-run the script.
+
 **By hand**, the equivalent on Ubuntu 24.04:
 
 ```sh
 cd ~/PDC-Demo
-git clone https://github.com/jporeilly/PDC-Policy-Generator.git
-echo "PDC-Policy-Generator/" >> .git/info/exclude   # keep the Glossary repo's `git status` clean
-cd PDC-Policy-Generator/policy_generator
+git clone --filter=blob:none --sparse https://github.com/jporeilly/PDC-Policy-Generator.git .pdc-policy-generator
+git -C .pdc-policy-generator sparse-checkout set policy_generator
+ln -s .pdc-policy-generator/policy_generator policy_generator
+printf '%s
+' '.pdc-policy-generator/' 'policy_generator' >> .git/info/exclude
+cd policy_generator
 bash run.sh --host 0.0.0.0        # VM checkouts may lack exec bits — bash, not ./
 ```
-
-(Already cloned? `git -C ~/PDC-Demo/PDC-Policy-Generator pull` — or just
-re-run the script.)
 
 `--host 0.0.0.0` binds all interfaces so the UI is reachable from the
 Windows host at `http://192.168.1.200:5001`. Cloned here, the app also

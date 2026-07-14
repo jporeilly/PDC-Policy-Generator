@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.2.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
+**Version:** 1.2.2 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -105,6 +105,9 @@ cd PDC-Policy-Generator/policy_generator
 ./run.sh                         # Linux/macOS → http://127.0.0.1:5001
 .\run.ps1                        # Windows (or double-click run.bat)
 ```
+
+(In a bootstrapped PDC-Demo the app sits flat at `PDC-Demo/policy_generator`
+— same commands from there.)
 
 The launcher manages a local `.venv` (Flask is the only dependency) and
 defaults to **port 5001** so the Glossary Generator (5000) runs alongside.

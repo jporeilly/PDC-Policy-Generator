@@ -4,9 +4,10 @@
 #
 # PDC-Demo is the Glossary repo's checkout (it holds glossary_generator/ and
 # data_sources/). This script checks that folder exists, then:
-#   - first run:  SPARSE-clones PDC-Policy-Generator into it — only the app
-#                 (policy_generator/ + root files); courseware and docs stay
-#                 off the VM — and excludes it from the outer `git status`
+#   - first run:  SPARSE-clones this repo (app only) into a hidden
+#                 .pdc-policy-generator/ and links it FLAT at the top level:
+#                 PDC-Demo/policy_generator + README-Policy.md
+#                 (an old PDC-Policy-Generator/ layout is migrated in place)
 #   - thereafter: pulls the latest (fast-forward only)
 # and finishes with the offline selftest, so you know the app is healthy.
 #
@@ -26,7 +27,7 @@
 set -euo pipefail
 
 REPO_URL="${POLICY_REPO_URL:-https://github.com/jporeilly/PDC-Policy-Generator.git}"
-APP_DIR_NAME="PDC-Policy-Generator"
+APP_DIR_NAME=".pdc-policy-generator"   # hidden clone; policy_generator symlinks to it at the top level
 
 # --- colours (auto-off when not a TTY or NO_COLOR is set) ------------------
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -66,8 +67,13 @@ fi
 echo
 
 # --- clone or pull ----------------------------------------------------------
-printf "${B}  ${APP_DIR_NAME}${RS}\n"
+printf "${B}  Policy Generator${RS}\n"
 TARGET="$DEMO/$APP_DIR_NAME"
+# migrate the old visible layout (PDC-Policy-Generator/) to the hidden clone
+if [ -d "$DEMO/PDC-Policy-Generator/.git" ] && [ ! -d "$TARGET" ]; then
+  mv "$DEMO/PDC-Policy-Generator" "$TARGET"
+  ok "Migrated PDC-Policy-Generator/ -> $APP_DIR_NAME/"
+fi
 if [ -d "$TARGET/.git" ]; then
   printf "  ${DIM}existing clone — pulling…${RS}\n"
   git -C "$TARGET" pull --ff-only || die "pull failed — local changes in $TARGET? Commit/stash them and re-run."
@@ -76,14 +82,21 @@ elif [ -e "$TARGET" ]; then
   die "$TARGET exists but is not a git clone — move it aside and re-run."
 else
   printf "  ${DIM}first run — sparse clone (app only)…${RS}\n"
-  git -C "$DEMO" clone --filter=blob:none --sparse "$REPO_URL" "$APP_DIR_NAME"
+  git -C "$DEMO" clone -q --filter=blob:none --sparse "$REPO_URL" "$APP_DIR_NAME"
   git -C "$TARGET" sparse-checkout set policy_generator
-  ok "Cloned to $TARGET (policy_generator/ only — courseware/docs stay off the VM)"
-  # A nested repo shows as untracked in the outer checkout — exclude it there.
-  if [ -d "$DEMO/.git" ] && ! grep -qx "$APP_DIR_NAME/" "$DEMO/.git/info/exclude" 2>/dev/null; then
-    echo "$APP_DIR_NAME/" >> "$DEMO/.git/info/exclude"
-    ok "Excluded $APP_DIR_NAME/ from the outer repo's git status"
-  fi
+  ok "Cloned (app only — courseware/docs stay off the VM)"
+fi
+
+# flat view at the top level: policy_generator/ beside glossary_generator/,
+# and the app's own README kept separate as README-Policy.md
+ln -sfn "$APP_DIR_NAME/policy_generator" "$DEMO/policy_generator"
+cp -f "$TARGET/README.md" "$DEMO/README-Policy.md" 2>/dev/null || true
+ok "policy_generator/ linked at the top level (README-Policy.md beside it)"
+# nested repo + generated entries stay out of the outer repo's git status
+if [ -d "$DEMO/.git" ]; then
+  for entry in "$APP_DIR_NAME/" "policy_generator" "README-Policy.md"; do
+    grep -qx "$entry" "$DEMO/.git/info/exclude" 2>/dev/null || echo "$entry" >> "$DEMO/.git/info/exclude"
+  done
 fi
 
 VER="$(cat "$TARGET/policy_generator/VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
@@ -126,7 +139,10 @@ if [ -d "$SCEN_DIR/.git" ]; then
   [ -n "$VERTICAL" ] || VERTICAL="$CUR"
   if [ -n "$VERTICAL" ]; then
     if (cd "$SCEN_DIR" && bash select-vertical.sh "$VERTICAL" >/dev/null); then
-      ok "Vertical $VERTICAL — courseware/$VERTICAL + data kit pulled"
+      # flat view: courseware/ at the top level beside the apps
+      ln -sfn "PDC-Scenarios/courseware" "$DEMO/courseware"
+      grep -qx "courseware" "$DEMO/.git/info/exclude" 2>/dev/null || echo "courseware" >> "$DEMO/.git/info/exclude"
+      ok "Vertical $VERTICAL — courseware/$VERTICAL + data kit pulled (courseware/ linked at the top level)"
     else
       warn "select-vertical.sh $VERTICAL failed — is '$VERTICAL' a valid scenario id?"
     fi
@@ -139,5 +155,5 @@ fi
 echo
 
 printf "${B}  Next${RS}\n"
-printf "  ${TEAL}cd $TARGET/policy_generator && bash run.sh --host 0.0.0.0${RS}\n"
+printf "  ${TEAL}cd $DEMO/policy_generator && bash run.sh --host 0.0.0.0${RS}\n"
 printf "  ${DIM}then open http://<vm-ip>:5001 — the Registry is auto-discovered from ../glossary_generator/registries/${RS}\n\n"
