@@ -12,6 +12,18 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.1] — 2026-07-14
+
+### Changed
+
+- The skipped-concepts panel now teaches the three-mechanism model instead
+  of just listing terms: seedless concepts are still fully governed — the
+  Glossary app's **Apply** step binds term/tags/sensitivity onto the mapped
+  columns; identification methods only add **value-based recognition**;
+  semantic conditions are **business rules**. It also says how to seed a
+  concept that *should* be value-recognizable (re-scan with profiling, or a
+  domain-pack `curated_seeds` entry).
+
 ## [1.4.0] — 2026-07-14
 
 ### Added — the Reconcile stage (working), rule inspector, import checklist

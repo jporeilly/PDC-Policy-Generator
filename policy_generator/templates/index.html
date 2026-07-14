@@ -551,7 +551,12 @@ $('preview').onclick = async () => {
       <th title="PDC's minted id when resolved; '— by name —' until reconciled (Reconcile page) or the Registry is re-exported after Resolve">Term id</th></tr>`
     + PREVIEW.map((x, i) => row(x, i)).join('') + '</table>';
   if (j.skipped.length)
-    html += `<div class="chkissue warn" style="display:block">${j.skipped.length} concept(s) skipped — no detection seeds, so nothing safe to author (detected by name/context only): `
+    html += `<div class="chkissue warn" style="display:block"><b>${j.skipped.length} concept(s) have no detection seed</b> — nothing safe to author, and that is usually correct:
+      identification methods only <i>recognize data by its values</i> (new/unknown columns and files). These terms are still fully governed —
+      the <b>Glossary app's Apply step</b> binds each term, its tags and sensitivity directly onto its mapped columns (the Registry's <code>sources[]</code>),
+      and semantic conditions (opt-out honoured, CVV absent) are <b>business rules</b>, not shapes.
+      If one of these SHOULD be value-recognizable, give it a seed on the glossary side: re-scan with profiling, or add a
+      <code>curated_seeds</code> entry to the domain pack (vetted canonical shape / reference list).<br><br>`
           + j.skipped.map(s => esc(s.term)).join(', ') + '</div>';
   $('manifest').innerHTML = html;
 };
