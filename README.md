@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.4.4 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
+**Version:** 1.4.5 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -47,33 +47,46 @@ own split between the Business Glossary and Data Identification:
    | **Drift-check** | compare deployed methods' Assign-Tags and PDC's live tag facet against the Registry's governed vocabulary — flag methods stamping off-vocabulary tags, governed tags nothing emits, and broken term bindings | next              |
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','secondaryColor':'#DBEEF3','tertiaryColor':'#F7FBFD','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','clusterBkg':'#F7FBFD','clusterBorder':'#CFE3EC'}}}%%
-flowchart LR
-    subgraph EST["Data estate — one vertical"]
-        DB[("cscu_core<br/>PostgreSQL")]
-        DOC[("cscu-documents<br/>MinIO")]
-    end
-    subgraph GG["Glossary Generator :5000"]
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','clusterBkg':'#F7FBFD','clusterBorder':'#CFE3EC','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':30,'rankSpacing':45}}}%%
+flowchart TB
+    PACK[/"Domain pack<br/><small>vocabulary &middot; curated_seeds</small>"/]
+    subgraph EST["Data estate &mdash; one vertical"]
         direction LR
-        SCAN["Scan + Profile"] --> REV["Steward review<br/>+ AI agents"] --> GOV["Govern"] --> GEN["Generate"]
+        DB[("cscu_core<br/>PostgreSQL")] ~~~ DOC[("cscu-documents<br/>MinIO")]
     end
-    subgraph PG["Policy Generator :5001"]
+    subgraph GG["Glossary Generator &mdash; :5000"]
         direction LR
-        AUT["Author"] --> RECON["Reconcile"] --> DEPL["Deploy ▸soon"] --> DRIFT["Drift-check ▸soon"]
+        SCAN["&#9312; Scan +<br/>Profile"] --> REV["&#9313; Steward review<br/>+ AI agents"] --> GOV["&#9314; Govern"] --> GEN["&#9315; Generate"]
     end
-    PACK["Domain pack<br/>vocabulary + curated_seeds"] --> GG
-    DB --> SCAN
-    DOC --> SCAN
-    GEN --> REG[["Classification Registry<br/>one governed row per concept:<br/>term · tags · sensitivity · seeds · sources"]]
-    REG --> AUT
-    GOV -- "glossary JSONL + Apply<br/>(mapping-based binding)" --> PDC[("Pentaho<br/>Data Catalog 11")]
-    AUT -- "custom patterns + dictionaries<br/>(value-based recognition)" --> PDC
-    RECON <-. "minted term ids" .-> PDC
-    DRIFT -. "live tag facet vs<br/>governed vocabulary" .-> PDC
-    classDef contract fill:#0A3D52,color:#fff,stroke:#0A3D52
-    classDef pdc fill:#DBEEF3,stroke:#065A82,color:#0A3D52
+    REG[["Classification Registry<br/><small>one governed row per concept:<br/>term &middot; tags &middot; sensitivity &middot; seeds &middot; sources</small>"]]
+    subgraph PG["Policy Generator &mdash; :5001"]
+        direction LR
+        AUT["&#9312; Author"] --> RECON["&#9313; Reconcile"] --> DEPL["&#9314; Deploy<br/><small>roadmap</small>"] --> DRIFT["&#9315; Drift-check<br/><small>roadmap</small>"]
+    end
+    PDC[("Pentaho Data Catalog 11 &mdash; the governed estate")]
+
+    PACK --> GG
+    EST --> GG
+    GG == "&#9315; writes<br/>the contract" ==> REG
+    REG == "&#9312; reads<br/>the contract" ==> PG
+    GG -- "&#9314; glossary JSONL + Apply<br/><small>mapping-based binding</small>" --> PDC
+    PG -- "&#9312; custom patterns + dictionaries<br/><small>value-based recognition</small>" --> PDC
+    PG <-. "&#9313; minted<br/>term ids" .-> PDC
+    PG -. "&#9315; live tag facet vs<br/>governed vocabulary" .-> PDC
+
+    style GG fill:#EFF7FA,stroke:#9CC4D4
+    style PG fill:#FDFBF2,stroke:#DFCE8F
+    style EST fill:#F7FBFD,stroke:#CFE3EC
+    classDef contract fill:#0A3D52,color:#fff,stroke:#0A3D52,stroke-width:2px
+    classDef pdc fill:#DBEEF3,stroke:#065A82,color:#0A3D52,stroke-width:2px
+    classDef roadmap fill:#F4F6F7,stroke:#9AA5AB,color:#5B6770,stroke-dasharray:4 3
+    classDef pack fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
+    classDef stage fill:#FFFFFF,stroke:#1C7293,color:#0A3D52
     class REG contract
     class PDC pdc
+    class DEPL,DRIFT roadmap
+    class PACK pack
+    class SCAN,REV,GOV,GEN,AUT,RECON stage
 ```
 
 Because both apps draw from the same Registry row, the glossary term, the
@@ -84,24 +97,27 @@ the point of the contract. The schema is documented field-by-field in
 ### The three mechanisms — how every governed term is applied and checked
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','secondaryColor':'#DBEEF3','tertiaryColor':'#F7FBFD','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','clusterBkg':'#F7FBFD','clusterBorder':'#CFE3EC'}}}%%
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':50,'rankSpacing':60}}}%%
 flowchart TB
-    C[["A governed concept<br/>(one Registry row)"]]
-    C --> A["<b>Apply</b> — mapping-based<br/>term + tags + sensitivity PATCHed<br/>onto the steward-mapped columns<br/><i>every reviewed term</i>"]
-    C --> I["<b>Identification</b> — value-based<br/>custom patterns and dictionaries<br/>recognize new or unknown data<br/><i>only concepts with a stable shape</i>"]
-    C --> R["<b>Business rules</b> — semantic<br/>opt-out honoured · CVV absent ·<br/>no SSNs in free text<br/><i>what no shape can express</i>"]
-    A --> PDC[("PDC governed estate")]
-    I --> PDC
-    R --> PDC
-    PDC -. "drift-check ▸soon:<br/>anything off-vocabulary is flagged" .-> C
+    C[["A governed concept<br/><small>one Registry row: term &middot; tags &middot; sensitivity &middot; seeds</small>"]]
+    C --> A("<b>Apply</b> &mdash; mapping-based<br/>term + tags + sensitivity PATCHed<br/>onto the steward-mapped columns<br/><i>every reviewed term</i>")
+    C --> I("<b>Identification</b> &mdash; value-based<br/>custom patterns and dictionaries<br/>recognize new or unknown data<br/><i>only concepts with a stable shape</i>")
+    C --> R("<b>Business rules</b> &mdash; semantic<br/>opt-out honoured &middot; CVV absent &middot;<br/>no SSNs in free text<br/><i>what no shape can express</i>")
+    A -- "Glossary app's<br/>Apply step" --> PDC[("PDC governed estate")]
+    I -- "this app's<br/>authored methods" --> PDC
+    R -- "steward checks" --> PDC
+    PDC -. "<b>drift-check</b> (roadmap):<br/>anything off-vocabulary is flagged" .-> C
+
     classDef map fill:#DBEEF3,stroke:#1C7293,color:#0A3D52
-    classDef ident fill:#FFF7E0,stroke:#C9A227,color:#7a5a00
+    classDef ident fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
     classDef rule fill:#F1EBF8,stroke:#7A5BA6,color:#4A3572
-    classDef contract fill:#0A3D52,color:#fff,stroke:#0A3D52
+    classDef contract fill:#0A3D52,color:#fff,stroke:#0A3D52,stroke-width:2px
+    classDef pdc fill:#F7FBFD,stroke:#065A82,color:#0A3D52,stroke-width:2px
     class A map
     class I ident
     class R rule
     class C contract
+    class PDC pdc
 ```
 
 ## What it does

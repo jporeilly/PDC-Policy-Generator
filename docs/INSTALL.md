@@ -1,6 +1,6 @@
 # Policy Generator — install & lab setup
 
-*App 1.1.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
+*App 1.4.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
 
 **Primary role:** Data Steward / Data Developer / IT Administrator
 **Estimated time:** 15–20 minutes (app only — the shared lab is a separate, one-time build)
@@ -45,12 +45,75 @@ scan and travels inside the Registry.
 | **Windows host** (bare metal) | both apps — the Glossary Generator (:5000, Ollama here) and this app (:5001) — plus the vertical's courseware and domain pack, installed to **`C:\PDC-Demo`** (kept separate from dev checkouts) | PowerShell: `iex "& { $(irm https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.ps1) } CSCU"` |
 | **Ubuntu VM** (192.168.1.200) | PDC 11.0.0 itself + the demo lab (Postgres 5433, MinIO) | `curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.sh \| bash -s -- CSCU` then `cd ~/PDC-Demo/PDC-Scenarios && make scenario ID=CSCU` |
 
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','clusterBkg':'#F7FBFD','clusterBorder':'#CFE3EC','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':35,'rankSpacing':70}}}%%
+flowchart LR
+    subgraph WIN["Windows host &mdash; bare metal &middot; C:&#92;PDC-Demo"]
+        direction TB
+        GGU["Glossary Generator &mdash; :5000<br/><small>+ Ollama (LLM stays on the host)</small>"]
+        PGU["Policy Generator &mdash; :5001<br/><small>no LLM &middot; no network in Author</small>"]
+        KIT["vertical courseware<br/>+ domain pack<br/><small>from PDC-Scenarios</small>"]
+    end
+    subgraph VM["Ubuntu 24.04 VM &mdash; 192.168.1.200 &middot; pentaho.io"]
+        direction TB
+        PDC[("PDC 11.0.0<br/><small>https://pentaho.io</small>")]
+        subgraph LAB["demo lab &mdash; Docker"]
+            direction TB
+            PGDB[("demo-postgres<br/>:5433")]
+            MINIO[("demo-minio<br/>:9000 / :9001")]
+        end
+    end
+    GGU == "Classification Registry" ==> PGU
+    GGU -- "glossary JSONL &middot; Apply &middot;<br/>Resolve Term IDs &mdash; HTTPS" --> PDC
+    PGU -- "method import (UI) &middot;<br/>reconcile (public API v3)" --> PDC
+    PDC -- "scan &middot; profile &middot;<br/>data identification" --> PGDB
+    PDC -- "Scan Files" --> MINIO
+    ALT["alt: either app can run on the VM instead &mdash;<br/>bash run.sh --host 0.0.0.0 &rarr; http://192.168.1.200:500x"]
+    ALT -.- VM
+
+    classDef contract fill:#0A3D52,color:#fff,stroke:#0A3D52
+    classDef pdc fill:#DBEEF3,stroke:#065A82,color:#0A3D52,stroke-width:2px
+    classDef data fill:#EEF6FA,stroke:#1C7293,color:#0A3D52
+    classDef kit fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
+    classDef note fill:#F4F6F7,stroke:#9AA5AB,color:#5B6770,stroke-dasharray:4 3
+    class PDC pdc
+    class PGDB,MINIO data
+    class KIT kit
+    class ALT note
+```
+
 Both bootstraps live in the PDC-Scenarios repo, remember the selected
 vertical, and are safe to re-run (that *is* the update path). The workflow
 after install: register the sources in PDC (the Glossary app's bulk loader,
 `datasources.csv`), scan → review → govern → Generate in the Glossary app
 (writes the Registry), then this app authors the Data Identification methods
 from it — the CSCU workshop walks every step with checkpoints.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':25,'rankSpacing':45}}}%%
+flowchart LR
+    S1["&#9312; Bootstrap<br/><small>install-pdc-demo &middot; CSCU<br/>both apps + the vertical</small>"]
+    S2["&#9313; Load the lab<br/><small>make scenario ID=CSCU<br/>Postgres 5433 + MinIO</small>"]
+    S3["&#9314; Register sources<br/><small>bulk loader &middot;<br/>datasources.csv</small>"]
+    S4["&#9315; Scan &rarr; review &rarr;<br/>govern &rarr; Generate<br/><small>writes the Registry</small>"]
+    S5["&#9316; Author<br/><small>methods zip:<br/>Patterns / Dictionaries</small>"]
+    S6["&#9317; Import + run<br/>Data Identification<br/><small>Management &rarr; Import</small>"]
+    S7["&#9318; Verify<br/><small>governed tags landed &mdash;<br/>and only governed tags</small>"]
+    S1 --> S2 --> S3 --> S4 == "Classification<br/>Registry" ==> S5 --> S6 --> S7
+
+    classDef infra fill:#F4F6F7,stroke:#9AA5AB,color:#3D4A50
+    classDef gloss fill:#DBEEF3,stroke:#1C7293,color:#0A3D52
+    classDef policy fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
+    classDef pdc fill:#EEF6FA,stroke:#065A82,color:#0A3D52,stroke-width:2px
+    class S1,S2 infra
+    class S3,S4 gloss
+    class S5 policy
+    class S6,S7 pdc
+```
+
+*Gray = one-time lab install &middot; blue = Glossary Generator &middot; amber = this
+app &middot; outlined = steps performed in PDC. The CSCU workshop walks every
+step with checkpoints.*
 
 ## Part A — Get the repository
 

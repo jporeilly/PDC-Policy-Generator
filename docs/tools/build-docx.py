@@ -223,11 +223,26 @@ def convert(md_path, cfg):
         ln = raw.strip()
 
         if ln.startswith("```"):
+            is_mermaid = ln.strip() == "```mermaid"
             block = []
             i += 1
             while i < len(lines) and not lines[i].strip().startswith("```"):
                 block.append(lines[i]); i += 1
             i += 1
+            if is_mermaid:
+                # mermaid renders natively on GitHub; in the docx we embed the
+                # pre-rendered PNG (docs/tools/render-diagrams.py keeps them in
+                # sync with the blocks). Falls back to nothing rather than
+                # printing raw diagram source into a course guide.
+                pngs = cfg.get("mermaid") or []
+                idx = getattr(doc, "mermaid_idx", 0)
+                doc.mermaid_idx = idx + 1
+                if idx < len(pngs) and os.path.exists(pngs[idx]):
+                    rid = "rId2%02d" % idx
+                    name = os.path.splitext(os.path.basename(pngs[idx]))[0]
+                    doc.body.append(drawing(rid, name, pngs[idx]))
+                    doc.images.append((rid, name, pngs[idx]))
+                cur_numid = None; continue
             doc.body.append(codeblock(block)); cur_numid = None; continue
 
         if ln.startswith("|") and i + 1 < len(lines) and re.match(r"^\|[\s\-|]+\|?\s*$", lines[i + 1].strip()):
@@ -372,7 +387,9 @@ DOCS = [
        meta=[("Primary role", "Data Steward / Data Developer / IT Administrator"),
              ("Estimated time", "15–20 minutes"),
              ("Dataset", DS)],
-       header="Setup Guide: Policy Generator")),
+       header="Setup Guide: Policy Generator",
+       mermaid=[os.path.join(ROOT, "images", "install-topology-preview.png"),
+                os.path.join(ROOT, "images", "install-workflow-preview.png")])),
 ]
 
 # Optional filters: `python tools/build-docx.py 03 04` builds only docs

@@ -12,6 +12,23 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.5] — 2026-07-14
+
+### Added — diagram pipeline: live mermaid in markdown, rendered PNGs in the docx
+
+- CONTRACT.md and INSTALL.md gained mermaid diagrams (contract anatomy +
+  lifecycle; install topology + workflow) alongside the README's pair — all
+  six validated with mermaid-cli.
+- **`docs/tools/render-diagrams.py`**: regenerates every diagram's canonical
+  PNG in `images/` from the live mermaid blocks (2× scale, white background)
+  so the images can never drift from the source.
+- **`build-docx.py` embeds mermaid as images**: a ```mermaid fence in
+  INSTALL.md becomes the corresponding rendered PNG in `lab-setup.docx`
+  (never raw diagram source in a course guide). Word-COM verified: 2 inline
+  images embedded.
+- Image audit across all three repos: every markdown image reference
+  resolves; INSTALL's front-matter version line refreshed.
+
 ## [1.4.4] — 2026-07-14
 
 ### Changed
