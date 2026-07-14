@@ -14,6 +14,8 @@ stage: every regex and reference list it emits was induced from profiled data
 by the [Glossary Generator](https://github.com/jporeilly/PDC-Glossary-Generator)'s
 scan and travels inside the Registry.
 
+![The Author page: Registry loaded, method preview with id-bound rules, and the mechanism-color-coded skipped groups](images/policy-generator-author.png)
+
 ## Why — the Registry
 
 In PDC the same three facts about a column — its business term, its tags, and
@@ -37,12 +39,12 @@ own split between the Business Glossary and Data Identification:
 2. **Policy Generator** (this repo) **reads that Registry** and owns the
    Data Identification lifecycle:
 
-   | Stage | What it does | Status |
-   | --- | --- | --- |
-   | **Author** | one Data Pattern (`patternsRules` JSON) per regex seed, one Dictionary (`dictionariesRules` JSON + values CSV) per reference-list seed — each assigning the Registry's governed tags and business term | **working** |
-   | **Reconcile** | verify each concept's minted `term_id` against a live PDC (Keycloak-first auth; the Glossary app's proven three-path term lookup) and bind authoring to the ids | **working** |
-   | **Deploy** | import the methods over the public API (v3) and trigger `DATA_IDENTIFICATION` bulk jobs scoped to the right entities | next |
-   | **Drift-check** | compare deployed methods' Assign-Tags and PDC's live tag facet against the Registry's governed vocabulary — flag methods stamping off-vocabulary tags, governed tags nothing emits, and broken term bindings | next |
+   | Stage                 | What it does                                                                                                                                                                                                  | Status            |
+   | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+   | **Author**      | one Data Pattern (`patternsRules` JSON) per regex seed, one Dictionary (`dictionariesRules` JSON + values CSV) per reference-list seed — each assigning the Registry's governed tags and business term   | **working** |
+   | **Reconcile**   | verify each concept's minted `term_id` against a live PDC (Keycloak-first auth; the Glossary app's proven three-path term lookup) and bind authoring to the ids                                              | **working** |
+   | **Deploy**      | import the methods over the public API (v3) and trigger `DATA_IDENTIFICATION` bulk jobs scoped to the right entities                                                                                         | next              |
+   | **Drift-check** | compare deployed methods' Assign-Tags and PDC's live tag facet against the Registry's governed vocabulary — flag methods stamping off-vocabulary tags, governed tags nothing emits, and broken term bindings | next              |
 
 Because both apps draw from the same Registry row, the glossary term, the
 tags a method stamps, and the sensitivity can never quietly diverge — that is
@@ -146,13 +148,13 @@ this repo's `install-pdc-demo.sh <ID>` does it for you on the VM.
 
 ## Documentation
 
-| Document | What it covers |
-| --- | --- |
-| [docs/INSTALL.md](docs/INSTALL.md) | Install & lab setup: prerequisites, cloning (workstation or `~/PDC-Demo`), web UI, CLI, selftest, troubleshooting |
-| [docs/lab-setup.docx](docs/lab-setup.docx) | The same guide in the course design (generated from INSTALL.md) |
-| [docs/CONTRACT.md](docs/CONTRACT.md) | The `classification-registry/1` schema and the guarantees both apps share |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release history (the app version lives in `policy_generator/VERSION`) |
-| [PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios) | Every vertical's data kit, domain pack and courseware — this app's workshops under `courseware/<ID>/Policy/` |
+| Document                                                   | What it covers                                                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [docs/INSTALL.md](docs/INSTALL.md)                          | Install & lab setup: prerequisites, cloning (workstation or`~/PDC-Demo`), web UI, CLI, selftest, troubleshooting |
+| [docs/lab-setup.docx](docs/lab-setup.docx)                  | The same guide in the course design (generated from INSTALL.md)                                                    |
+| [docs/CONTRACT.md](docs/CONTRACT.md)                        | The`classification-registry/1` schema and the guarantees both apps share                                         |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md)                      | Release history (the app version lives in`policy_generator/VERSION`)                                             |
+| [PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios) | Every vertical's data kit, domain pack and courseware — this app's workshops under`courseware/<ID>/Policy/`     |
 
 The shared lab (PDC VM, demo PostgreSQL + MinIO, scenario loads) is owned by
 the Glossary repo — its `data_sources/lab/lab-setup.docx` (Parts A–I) is the
