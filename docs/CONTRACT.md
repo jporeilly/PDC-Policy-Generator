@@ -28,7 +28,7 @@ backfills `term_id` / `glossary_id` after the glossary is imported into PDC.
 | `off_vocabulary_tags` | tags that escaped the allow-list | authoring refuses them; drift flags them |
 | `category` | glossary category | rule `category` grouping |
 | `definition` | the steward's reviewed definition | context in review output |
-| `detect[]` | detection seeds from profiling: `{type: "pattern", regex, signature}` or `{type: "dictionary", values[]}` | **the authorable core** — one method per seed |
+| `detect[]` | detection seeds: `{type: "pattern", regex, signature?, source}` or `{type: "dictionary", values[], source}`. `source: "profiled"` = induced from scanned data; `source: "curated"` = a vetted canonical shape or reference list from the domain pack's `curated_seeds` (profiled wins over curated for the same seed type) | **the authorable core** — one method per seed |
 | `sources[]` | the physical columns/files the term maps to | column-name regex hints |
 | `keys` | per-source `{pk, fk, ref}` facts | relationship context (identity vs join) |
 | `method` | reserved: the deployed method binding this app writes back | reconcile/drift |
@@ -42,4 +42,6 @@ backfills `term_id` / `glossary_id` after the glossary is imported into PDC.
   names, the same ids the glossary JSONL carries — so bindings survive
   re-exports.
 - **Evidence-grounded methods**: every regex/dictionary was induced from
-  profiled data (or a gated canonical shape), not guessed from names.
+  profiled data or comes from the pack's vetted `curated_seeds` (`source`
+  says which), never guessed from names — the custom-only program's
+  auditable replacement for PDC's built-ins.
