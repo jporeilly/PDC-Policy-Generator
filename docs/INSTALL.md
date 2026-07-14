@@ -42,7 +42,7 @@ scan and travels inside the Registry.
 
 | Where | What runs there | One-command install/update |
 | --- | --- | --- |
-| **Windows host** (bare metal) | both apps — the Glossary Generator (:5000, Ollama here) and this app (:5001) — plus the vertical's courseware and domain pack | PowerShell: `iex "& { $(irm https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.ps1) } CSCU"` |
+| **Windows host** (bare metal) | both apps — the Glossary Generator (:5000, Ollama here) and this app (:5001) — plus the vertical's courseware and domain pack, installed to **`C:\PDC-Demo`** (kept separate from dev checkouts) | PowerShell: `iex "& { $(irm https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.ps1) } CSCU"` |
 | **Ubuntu VM** (192.168.1.200) | PDC 11.0.0 itself + the demo lab (Postgres 5433, MinIO) | `curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.sh \| bash -s -- CSCU` then `cd ~/PDC-Demo/PDC-Scenarios && make scenario ID=CSCU` |
 
 Both bootstraps live in the PDC-Scenarios repo, remember the selected
