@@ -30,8 +30,9 @@ own split between the Business Glossary and Data Identification:
    (its own repo) builds the reviewed business glossary and, at export,
    authors the Registry — one row per governed concept carrying the term,
    governed tags (from a controlled allow-list), floor-lifted sensitivity,
-   the scan's **detection seeds** (induced value regexes like `^CSCU-\d{6}$`
-   and profiled reference-value lists), the physical source columns, PK/FK
+   the **detection seeds** (value regexes like `^CSCU-\d{6}$` induced from
+   profiled data, plus vetted `curated_seeds` from the domain pack — each
+   marked `source: profiled|curated`), the physical source columns, PK/FK
    facts, and the full governed tag vocabulary with its audit provenance.
 2. **Policy Generator** (this repo) **reads that Registry** and owns the
    Data Identification lifecycle:
@@ -56,13 +57,19 @@ the point of the contract. The schema is documented field-by-field in
   inside the Glossary checkout (the lab VM's `~/PDC-Demo` layout), the app
   **auto-discovers** `glossary_generator/registries/registry.*.json` and
   lists what it found — a single match loads itself.
-- **Author** — preview the method manifest (every rule with its term and
-  binding), then download the set as one zip: `Patterns/`, `Dictionaries/`
-  (+ values CSVs), `INDEX.csv` — the exact shapes PDC's
-  **Management → Data Identification → Import** accepts (the same shapes the
-  CSCU Technical Track teaches, so a steward can read every field). Tags are
-  re-filtered against the Registry's embedded allow-list at authoring time;
-  off-vocabulary tags are refused, never imported.
+- **Author** — preview the method manifest, inspect any rule (governed tag
+  chips, column hint, the **full JSON exactly as PDC imports it**, and a
+  live tester for the regex or dictionary values), then download the set as
+  one zip: `Patterns/`, `Dictionaries/` (+ values CSVs), `INDEX.csv` — the
+  exact shapes PDC's **Management → Data Identification → Import** accepts.
+  Tags are re-filtered against the Registry's embedded allow-list at
+  authoring time; off-vocabulary tags are refused, never imported.
+- **Explain, don't confuse** — concepts without seeds are grouped into
+  color-coded buckets by the mechanism that governs them: *seedable*
+  (amber — add a curated seed), *applied by mapping* (teal — the Glossary
+  app's Apply step), *business-rule territory* (purple), *table/folder
+  level* (gray). An import checklist tracks the manual PDC steps after each
+  download and drives the workflow stepper.
 - **Learn as you go** — the UI teaches the way the Glossary app does:
   expandable **"Under the hood"** panels explain every concept (what each
   summary number means, how a seed becomes a method field-by-field) and show
@@ -88,9 +95,9 @@ docs/
   INSTALL.md            install & lab-setup guide (markdown master)
   lab-setup.docx        the same guide in the course design, generated
   tools/                builds docs/lab-setup.docx from INSTALL.md
-install-pdc-demo.sh  install/update the app inside the lab VM's
-                        ~/PDC-Demo checkout + pull the selected vertical's
-                        courseware from PDC-Scenarios (clone or pull + selftest)
+install-pdc-demo.sh     install/update the app inside the lab VM's ~/PDC-Demo
+                        checkout + pull the selected vertical's courseware
+                        from PDC-Scenarios (clone or pull + selftest)
 ```
 
 ## Install & run
