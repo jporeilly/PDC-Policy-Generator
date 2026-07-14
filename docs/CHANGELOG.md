@@ -12,6 +12,23 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.2] — 2026-07-14
+
+### Changed — skipped concepts classified and color-coded by mechanism
+
+- The flat skipped-terms list is now grouped into four color-coded buckets,
+  each with a count and hover explanation: **amber** — should be
+  value-recognizable (add a `curated_seeds` entry or re-scan with
+  profiling); **teal** — applied by mapping (the Glossary app's Apply step
+  governs them on their mapped columns); **purple** — business-rule
+  territory (free text / semantics); **gray** — table/folder-level concepts.
+  Classification is server-side (`_bucket()` in `app.py`), verified against
+  19 real CSCU term names.
+- The CSCU Policy workshop gained a matching **"Why most concepts have no
+  method — the three mechanisms"** section (Apply / identification /
+  business rules, how to read the color groups, drift-check closes the
+  loop) — PDC-Scenarios commit `1a5cbdb`.
+
 ## [1.4.1] — 2026-07-14
 
 ### Changed

@@ -148,8 +148,26 @@ def api_preview():
     return jsonify({
         "patterns": [_pat(p) for p in art["patterns"]],
         "dictionaries": [_dic(d) for d in art["dictionaries"]],
-        "skipped": art["skipped"],
+        "skipped": [dict(s, bucket=_bucket(s["term"])) for s in art["skipped"]],
     })
+
+
+# Why a seedless concept is *correctly* method-less — presentation-side
+# classification so the UI can group the skipped list by governance mechanism.
+_B_STRUCTURAL = re.compile(r"\b(record|records|report|register|entry|root|documents?|summary)\s*$", re.I)
+_B_FREETEXT = re.compile(r"\b(notes?|text|memo|narrative|description|details?|comments?)\b", re.I)
+_B_SEEDABLE = re.compile(r"\b(ssn|social security|e-?mail|phone|zip|postal|city|state|address|iban|swift|routing)\b", re.I)
+
+
+def _bucket(term):
+    t = term or ""
+    if _B_SEEDABLE.search(t):
+        return "seed"
+    if _B_STRUCTURAL.search(t):
+        return "structural"
+    if _B_FREETEXT.search(t):
+        return "rule"
+    return "mapping"
 
 
 # --------------------------------------------------------------------------- #

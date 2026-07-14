@@ -104,6 +104,15 @@
   .srcfile code{font-size:12px;font-weight:700;color:var(--ink)}
   .srcfile .meta{color:var(--mute);font-size:12px}
   .srcfile button{margin-left:auto}
+  /* skipped-concepts buckets */
+  .skipbox{margin-top:12px;font-size:12.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;line-height:1.5}
+  .skgrp{margin-top:8px;border-radius:8px;padding:9px 12px;border:1px solid var(--line);border-left-width:4px;background:var(--panel)}
+  .skgrp .skh{font-size:12.5px;font-weight:700;cursor:help}
+  .skgrp .valchips{max-height:96px}
+  .bk-seed{border-left-color:#C9A227}   .bk-seed .skh{color:#8a6d1a}
+  .bk-map{border-left-color:var(--teal)} .bk-map .skh{color:var(--blue)}
+  .bk-rule{border-left-color:#7A5BA6}   .bk-rule .skh{color:#6A4AA0}
+  .bk-struct{border-left-color:#8a97a0} .bk-struct .skh{color:var(--mute)}
   /* rule inspector + checklist */
   .rtbl tr.expandable{cursor:pointer} .rtbl tr.expandable:hover td{background:var(--card)}
   .insp{background:var(--card)}
@@ -550,14 +559,28 @@ $('preview').onclick = async () => {
       <th title="The governed business term the method binds">Business term</th>
       <th title="PDC's minted id when resolved; '— by name —' until reconciled (Reconcile page) or the Registry is re-exported after Resolve">Term id</th></tr>`
     + PREVIEW.map((x, i) => row(x, i)).join('') + '</table>';
-  if (j.skipped.length)
-    html += `<div class="chkissue warn" style="display:block"><b>${j.skipped.length} concept(s) have no detection seed</b> — nothing safe to author, and that is usually correct:
-      identification methods only <i>recognize data by its values</i> (new/unknown columns and files). These terms are still fully governed —
-      the <b>Glossary app's Apply step</b> binds each term, its tags and sensitivity directly onto its mapped columns (the Registry's <code>sources[]</code>),
-      and semantic conditions (opt-out honoured, CVV absent) are <b>business rules</b>, not shapes.
-      If one of these SHOULD be value-recognizable, give it a seed on the glossary side: re-scan with profiling, or add a
-      <code>curated_seeds</code> entry to the domain pack (vetted canonical shape / reference list).<br><br>`
-          + j.skipped.map(s => esc(s.term)).join(', ') + '</div>';
+  if (j.skipped.length) {
+    const BUCKETS = [
+      {k:'seed', label:'Should be value-recognizable — give it a seed', cls:'bk-seed',
+       help:'These look like canonical shapes or reference lists. Add a curated_seeds entry to the domain pack (or re-scan with profiling) and they become custom methods — the custom-only replacement for PDC\'s built-ins.'},
+      {k:'mapping', label:'Applied by mapping — the Glossary app\'s Apply step', cls:'bk-map',
+       help:'No stable value shape (amounts, dates, ids, codes without profiled lists, names). Apply binds the term, tags and sensitivity directly onto the mapped columns (the Registry\'s sources[]) — governed without a method, by steward-reviewed mapping.'},
+      {k:'rule', label:'Business-rule territory — free text & semantics', cls:'bk-rule',
+       help:'Free text and semantic conditions (SSNs inside notes, opt-out honoured). No shape can express these — they are Workshop 04 business rules, not identification methods.'},
+      {k:'structural', label:'Table / folder level — applied by mapping', cls:'bk-struct',
+       help:'Record-, report- and folder-level concepts. They govern whole tables and document folders through Apply; column-level identification does not apply to them.'},
+    ];
+    let sk = `<div class="skipbox"><b>${j.skipped.length} concept(s) have no detection seed</b> — usually correct:
+      identification only <i>recognizes data by its values</i>. Every one of these is still governed; the color says by which mechanism
+      <span class="help" title="Identification methods (this app) recognize values; the Glossary app's Apply step binds terms to their mapped columns; business rules check semantics. Drift-check (roadmap) closes the loop.">?</span></div>`;
+    for (const b of BUCKETS) {
+      const terms = j.skipped.filter(s => s.bucket === b.k);
+      if (!terms.length) continue;
+      sk += `<div class="skgrp ${b.cls}"><div class="skh" title="${esc(b.help)}">${b.label} <span class="msg">(${terms.length})</span> <span class="help" title="${esc(b.help)}">?</span></div>
+             <div class="valchips">${terms.map(s => `<span title="${esc(s.why || '')}">${esc(s.term)}</span>`).join('')}</div></div>`;
+    }
+    html += sk;
+  }
   $('manifest').innerHTML = html;
 };
 
