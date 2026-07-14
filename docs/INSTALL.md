@@ -81,7 +81,7 @@ works identically — nothing in the app assumes a location.)
 | `docs/CONTRACT.md` | the `classification-registry/1` schema, field by field |
 | `docs/CHANGELOG.md` | version history (the app version lives in `policy_generator/VERSION`) |
 | `courseware/CSCU/` | the CSCU workshop set for this app (+ the Word-guide builder in `tools/`) |
-| `INSTALL.md` | this guide — the markdown master `lab-setup.docx` is generated from |
+| `docs/INSTALL.md` | this guide — the markdown master `docs/lab-setup.docx` is generated from |
 
 ## Part B — Run the web UI
 

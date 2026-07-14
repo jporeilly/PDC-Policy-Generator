@@ -80,10 +80,10 @@ policy_generator/       the app: engine (registry.py, author.py), CLI,
 docs/
   CONTRACT.md           the classification-registry/1 schema, field by field
   CHANGELOG.md          release history
+  INSTALL.md            install & lab-setup guide (markdown master)
+  lab-setup.docx        the same guide in the course design, generated
 courseware/             one workshop set per scenario (CSCU today), same
   CSCU/                 course design + docx builder as the Glossary repo
-INSTALL.md              install & lab-setup guide (markdown master)
-lab-setup.docx          the same guide in the course design, generated
 ```
 
 ## Install & run
@@ -92,8 +92,8 @@ lab-setup.docx          the same guide in the course design, generated
 the methods — the app itself stays offline. **No LLM.**
 
 The full guide — including cloning into the lab VM's `~/PDC-Demo` Glossary
-checkout — is [INSTALL.md](INSTALL.md) (also as
-[lab-setup.docx](lab-setup.docx)). The short version:
+checkout — is [docs/INSTALL.md](docs/INSTALL.md) (also as
+[docs/lab-setup.docx](docs/lab-setup.docx)). The short version:
 
 ```bash
 git clone https://github.com/jporeilly/PDC-Policy.git
@@ -129,8 +129,8 @@ run Data Identification → verify, with checkpoints.
 
 | Document | What it covers |
 | --- | --- |
-| [INSTALL.md](INSTALL.md) | Install & lab setup: prerequisites, cloning (workstation or `~/PDC-Demo`), web UI, CLI, selftest, troubleshooting |
-| [lab-setup.docx](lab-setup.docx) | The same guide in the course design (generated from INSTALL.md) |
+| [docs/INSTALL.md](docs/INSTALL.md) | Install & lab setup: prerequisites, cloning (workstation or `~/PDC-Demo`), web UI, CLI, selftest, troubleshooting |
+| [docs/lab-setup.docx](docs/lab-setup.docx) | The same guide in the course design (generated from INSTALL.md) |
 | [docs/CONTRACT.md](docs/CONTRACT.md) | The `classification-registry/1` schema and the guarantees both apps share |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release history (the app version lives in `policy_generator/VERSION`) |
 | [courseware/](courseware/) | One workshop set per scenario (CSCU today; RETAIL/HEALTH/MFG plug in the same way) |

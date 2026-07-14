@@ -372,7 +372,7 @@ DOCS = [
        meta=[("Primary role", "Data Steward / Data Developer"), ("Estimated time", "45–60 minutes"),
              ("Dataset", DS)],
        header="App Workshop: Policy Generator")),
- ("../../INSTALL.md", "../../lab-setup.docx",
+ ("../../docs/INSTALL.md", "../../docs/lab-setup.docx",
   dict(eyebrow1=E1T, eyebrow2="PDC PROCESS  ·  INSTALL & LAB SETUP", label="SETUP GUIDE",
        title="Install & Lab Setup",
        subtitle="Stand up the Policy Generator — web UI, CLI and selftest — and connect it to the shared PDC lab.",

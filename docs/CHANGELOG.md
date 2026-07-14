@@ -29,14 +29,14 @@ single source of truth — the web UI banner and
 
 ### Added — install & lab-setup guide
 
-- **`INSTALL.md`** (repo root) — the authoritative setup master: overview,
+- **`docs/INSTALL.md`** — the authoritative setup master: overview,
   prerequisites (pointing at the Glossary repo's `lab-setup.docx` Parts A–I
   for the shared lab), Part A get the repo (including cloning inside the lab
   VM's `~/PDC-Demo` Glossary checkout as a nested repo, with the
   `.git/info/exclude` hygiene line), Part B web UI, Part C CLI, Part D
   selftest verification, Part E updating, Part F the PDC import side,
   Part G troubleshooting.
-- **`lab-setup.docx`** (repo root) — generated from `INSTALL.md` by
+- **`docs/lab-setup.docx`** — generated from `INSTALL.md` by
   `courseware/CSCU/tools/build-docx.py` (new DOCS entry; markdown master
   stays authoritative), Word-COM verified.
 
