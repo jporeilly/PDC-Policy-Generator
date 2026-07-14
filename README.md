@@ -96,8 +96,8 @@ checkout — is [docs/INSTALL.md](docs/INSTALL.md) (also as
 [docs/lab-setup.docx](docs/lab-setup.docx)). The short version:
 
 ```bash
-git clone https://github.com/jporeilly/PDC-Policy.git
-cd PDC-Policy/policy_generator
+git clone https://github.com/jporeilly/PDC-Policy-Generator.git
+cd PDC-Policy-Generator/policy_generator
 ./run.sh                         # Linux/macOS → http://127.0.0.1:5001
 .\run.ps1                        # Windows (or double-click run.bat)
 ```

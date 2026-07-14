@@ -14,11 +14,17 @@ single source of truth — the web UI banner and
 
 ## [1.1.2] — 2026-07-14
 
+### Changed
+
+- **Repository renamed** `PDC-Policy` → **`PDC-Policy-Generator`**, matching
+  the companion `PDC-Glossary-Generator`. GitHub redirects the old URL; all
+  clone commands and cross-references swept.
+
 ### Added — Registry auto-discovery (clone beside the Glossary app, zero config)
 
 - `registry.discover_registries()`: probes `POLICY_REGISTRY_DIR`, then the
   repo's parent folder for `glossary_generator/registries/registry.*.json` —
-  the layout when PDC-Policy is cloned **inside** the Glossary checkout
+  the layout when PDC-Policy-Generator is cloned **inside** the Glossary checkout
   (the lab VM's `~/PDC-Demo`) — then sibling `PDC-Glossary`/
   `PDC-Glossary-Generator` checkouts. Newest first.
 - **Web UI**: `GET /api/registries` + a "Found on this machine" picker on the

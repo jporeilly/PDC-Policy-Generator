@@ -41,8 +41,8 @@ scan and travels inside the Registry.
 ## Part A — Get the repository
 
 ```sh
-git clone https://github.com/jporeilly/PDC-Policy.git
-cd PDC-Policy
+git clone https://github.com/jporeilly/PDC-Policy-Generator.git
+cd PDC-Policy-Generator
 ```
 
 ### Cloning into the lab VM's `PDC-Demo` folder
@@ -55,9 +55,9 @@ single untracked directory, the two never interfere:
 
 ```sh
 cd ~/PDC-Demo
-git clone https://github.com/jporeilly/PDC-Policy.git
-echo "PDC-Policy/" >> .git/info/exclude   # keep the Glossary repo's `git status` clean
-cd PDC-Policy/policy_generator
+git clone https://github.com/jporeilly/PDC-Policy-Generator.git
+echo "PDC-Policy-Generator/" >> .git/info/exclude   # keep the Glossary repo's `git status` clean
+cd PDC-Policy-Generator/policy_generator
 bash run.sh --host 0.0.0.0        # VM checkouts may lack exec bits — bash, not ./
 ```
 
@@ -70,7 +70,7 @@ in one click — a single match loads automatically. The CLI does the same
 when you omit the path (`python -m policy_generator info`). To point
 somewhere else entirely, set `POLICY_REGISTRY_DIR`.
 
-(Prefer it fully separate? Cloning to `~/PDC-Policy` beside `~/PDC-Demo`
+(Prefer it fully separate? Cloning to `~/PDC-Policy-Generator` beside `~/PDC-Demo`
 works identically — nothing in the app assumes a location.)
 
 ### Where things live in the repository

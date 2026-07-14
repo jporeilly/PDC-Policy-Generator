@@ -51,7 +51,7 @@ def discover_registries() -> list:
     """Find Registry files the Glossary Generator wrote, no configuration
     needed. Looks (in order) at POLICY_REGISTRY_DIR, then for a
     glossary_generator/registries/ folder in this repo's parent — the layout
-    when PDC-Policy is cloned inside the Glossary checkout (~/PDC-Demo) — and
+    when this repo is cloned inside the Glossary checkout (~/PDC-Demo) — and
     finally in sibling Glossary checkouts. Newest first."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root
     parent = os.path.dirname(root)                # the folder the repo was cloned into
