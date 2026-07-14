@@ -104,6 +104,10 @@
   .srcfile code{font-size:12px;font-weight:700;color:var(--ink)}
   .srcfile .meta{color:var(--mute);font-size:12px}
   .srcfile button{margin-left:auto}
+  /* reconcile progress */
+  .recprog{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .bar{flex:1;height:9px;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:var(--teal);transition:width .25s}
   /* skipped-concepts buckets */
   .skipbox{margin-top:12px;font-size:12.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;line-height:1.5}
   .skgrp{margin-top:8px;border-radius:8px;padding:9px 12px;border:1px solid var(--line);border-left-width:4px;background:var(--panel)}
@@ -390,6 +394,10 @@ scoped to the entities the Registry's sources[] name).</pre></details>
         <button class="primary" id="recRun" disabled title="Requires a loaded Registry and a PDC connection">Reconcile</button>
         <button class="ghost" id="recApply" disabled title="Stamp the PDC-found ids into the loaded Registry (in memory) so authoring binds by id — then re-author the zip">Use reconciled ids for authoring</button>
         <a class="ghost" id="recExport" href="/api/registry/export" download style="display:none;text-decoration:none;padding:8px 14px" title="Download the loaded Registry with the reconciled ids stamped in — the Glossary app still owns the original file">Export reconciled registry</a>
+      </div>
+      <div class="recprog" id="recProg" style="display:none">
+        <div class="bar"><i id="recBarFill"></i></div>
+        <span class="msg" id="recProgTxt" style="white-space:nowrap"></span>
       </div>
       <div class="chkissue" id="recNote"></div>
       <div id="recTable"></div>
@@ -689,31 +697,47 @@ $('pdcConnect').onclick = async () => {
   $('pdcConnect').disabled = false; $('pdcConnect').textContent = 'Connect';
   recButtons();
 };
+const recRowHtml = x => `<tr><td>${esc(x.term)}${x.seeded ? '' : ' <span class="msg" title="No detection seed — this concept is not authored either way">(no seed)</span>'}</td>
+    <td><code>${x.registry_id ? esc(x.registry_id) : '—'}</code></td>
+    <td><code>${x.pdc_id ? esc(x.pdc_id) : '—'}</code></td>
+    <td><span class="badge ${x.status}">${x.status}</span></td></tr>`;
+
 $('recRun').onclick = async () => {
   clearNote($('recNote')); $('recRun').disabled = true; $('recRun').textContent = 'Reconciling…';
+  $('recProg').style.display = ''; $('recBarFill').style.width = '0%'; $('recProgTxt').textContent = 'starting…';
+  $('recTable').innerHTML = `<table class="rtbl"><tr>
+      <th>Business term</th>
+      <th title="The id the Registry carries (backfilled by the Glossary app's Resolve step)">Registry id</th>
+      <th title="The id PDC returned for this term right now">PDC id</th>
+      <th title="verified = match · resolved = PDC has an id the Registry lacks · mismatch = ids differ · missing = not found in PDC">Status</th></tr><tbody id="recRows"></tbody></table>`;
   try {
-    const r = await fetch('/api/reconcile', {method:'POST'});
-    const j = await r.json();
-    if (!r.ok) { note($('recNote'), 'bad', j.error || 'reconcile failed'); if (r.status === 401) pdcConnected = false; }
-    else {
-      const c = j.counts;
-      note($('recNote'), c.missing ? 'warn' : 'ok',
-        `${c.verified} verified · ${c.resolved} resolved · ${c.mismatch} mismatch · ${c.missing} missing`
-        + (c.missing ? ' — missing terms usually mean the glossary isn’t imported into PDC yet.' : '')
-        + (j.bindable ? ` ${j.bindable} id(s) can be applied for authoring.` : ''));
-      $('recTable').innerHTML = `<table class="rtbl"><tr>
-          <th>Business term</th>
-          <th title="The id the Registry carries (backfilled by the Glossary app's Resolve step)">Registry id</th>
-          <th title="The id PDC returned for this term right now">PDC id</th>
-          <th title="verified = match · resolved = PDC has an id the Registry lacks · mismatch = ids differ · missing = not found in PDC">Status</th></tr>`
-        + j.rows.map(x => `<tr><td>${esc(x.term)}${x.seeded ? '' : ' <span class="msg" title="No detection seed — this concept is not authored either way">(no seed)</span>'}</td>
-            <td><code>${x.registry_id ? esc(x.registry_id) : '—'}</code></td>
-            <td><code>${x.pdc_id ? esc(x.pdc_id) : '—'}</code></td>
-            <td><span class="badge ${x.status}">${x.status}</span></td></tr>`).join('') + '</table>';
-      $('recApply').disabled = !j.bindable;
-      $('recExport').style.display = '';
+    let offset = 0;
+    for (;;) {
+      const r = await fetch('/api/reconcile', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({offset, limit: 8})});
+      const j = await r.json();
+      if (!r.ok) {
+        note($('recNote'), 'bad', j.error || 'reconcile failed');
+        if (r.status === 401) pdcConnected = false;
+        break;
+      }
+      $('recRows').insertAdjacentHTML('beforeend', j.rows.map(recRowHtml).join(''));
+      $('recBarFill').style.width = Math.round(100 * j.done / j.total) + '%';
+      $('recProgTxt').textContent = `${j.done}/${j.total} terms`;
+      offset = j.done;
+      if (j.finished) {
+        const c = j.counts;
+        note($('recNote'), c.missing ? 'warn' : 'ok',
+          `${c.verified} verified · ${c.resolved} resolved · ${c.mismatch} mismatch · ${c.missing} missing`
+          + (c.missing ? ' — missing terms usually mean the glossary isn’t imported into PDC yet.' : '')
+          + (j.bindable ? ` — ${j.bindable} id(s) can be applied for authoring.` : ''));
+        $('recApply').disabled = !j.bindable;
+        $('recExport').style.display = '';
+        break;
+      }
     }
   } catch(e) { note($('recNote'), 'bad', 'reconcile failed: ' + e); }
+  $('recProg').style.display = 'none';
   $('recRun').textContent = 'Reconcile'; recButtons();
 };
 $('recApply').onclick = async () => {

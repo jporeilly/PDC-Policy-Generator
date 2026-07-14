@@ -200,26 +200,8 @@ def api_pdc_connect():
                     "expires_in": who.get("expires_in")})
 
 
-@app.post("/api/reconcile")
-def api_reconcile():
-    """Look up every concept's term in PDC and compare with the Registry's
-    term_id: verified / mismatch / resolved (new id found) / missing."""
-    if _state["reg"] is None:
-        return jsonify({"error": "load a Registry first"}), 400
-    if not _state["pdc"]:
-        return jsonify({"error": "connect to PDC first"}), 400
-    p = _state["pdc"]
-    concepts = [c for c in _state["reg"].get("concepts", []) if isinstance(c, dict)]
-    names = [c.get("term_name") for c in concepts if c.get("term_name")]
-    try:
-        found = pdc_mod.resolve_terms(p["base"], p["token"], names,
-                                      version=p["version"], verify_tls=p["verify_tls"])
-    except pdc_mod.TokenExpired:
-        _state["pdc"] = None
-        return jsonify({"error": "PDC session expired — connect again"}), 401
-    except Exception as e:
-        return jsonify({"error": f"PDC lookup failed: {e}"}), 502
-    rows, counts = [], {"verified": 0, "mismatch": 0, "resolved": 0, "missing": 0}
+def _reconcile_rows(concepts, found):
+    rows = []
     for c in concepts:
         name = c.get("term_name") or ""
         reg_id = c.get("term_id") or None
@@ -233,13 +215,61 @@ def api_reconcile():
             status = "resolved"
         else:
             status = "missing"
-        counts[status] += 1
         rows.append({"term": name, "registry_id": reg_id, "pdc_id": pdc_id,
                      "glossary_id": hit.get("glossaryId"), "status": status,
                      "seeded": bool(c.get("detect"))})
-    _state["reconcile"] = rows
-    return jsonify({"rows": rows, "counts": counts,
-                    "bindable": counts["resolved"] + counts["mismatch"]})
+    return rows
+
+
+def _reconcile_counts(rows):
+    counts = {"verified": 0, "mismatch": 0, "resolved": 0, "missing": 0}
+    for r in rows:
+        counts[r["status"]] += 1
+    return counts
+
+
+@app.post("/api/reconcile")
+def api_reconcile():
+    """Look up concepts' terms in PDC and compare with the Registry's term_id:
+    verified / mismatch / resolved / missing. Pass {offset, limit} to run in
+    batches — the UI does, so it can draw an exact progress bar; without a
+    limit the whole Registry is reconciled in one call."""
+    if _state["reg"] is None:
+        return jsonify({"error": "load a Registry first"}), 400
+    if not _state["pdc"]:
+        return jsonify({"error": "connect to PDC first"}), 400
+    p = _state["pdc"]
+    b = request.get_json(silent=True) or {}
+    concepts = [c for c in _state["reg"].get("concepts", []) if isinstance(c, dict)]
+    limit = b.get("limit")
+    offset = max(0, int(b.get("offset") or 0))
+    chunk = concepts if limit is None else concepts[offset:offset + max(1, min(int(limit), 50))]
+    names = [c.get("term_name") for c in chunk if c.get("term_name")]
+    try:
+        found = pdc_mod.resolve_terms(p["base"], p["token"], names,
+                                      version=p["version"], verify_tls=p["verify_tls"])
+    except pdc_mod.TokenExpired:
+        _state["pdc"] = None
+        return jsonify({"error": "PDC session expired — connect again"}), 401
+    except Exception as e:
+        return jsonify({"error": f"PDC lookup failed: {e}"}), 502
+    rows = _reconcile_rows(chunk, found)
+    if limit is None:
+        _state["reconcile"] = rows
+        counts = _reconcile_counts(rows)
+        return jsonify({"rows": rows, "counts": counts,
+                        "bindable": counts["resolved"] + counts["mismatch"]})
+    if offset == 0:
+        _state["reconcile"] = []
+    _state["reconcile"].extend(rows)
+    done = min(offset + len(chunk), len(concepts))
+    finished = done >= len(concepts)
+    resp = {"rows": rows, "done": done, "total": len(concepts), "finished": finished}
+    if finished:
+        counts = _reconcile_counts(_state["reconcile"])
+        resp["counts"] = counts
+        resp["bindable"] = counts["resolved"] + counts["mismatch"]
+    return jsonify(resp)
 
 
 @app.post("/api/reconcile/apply")

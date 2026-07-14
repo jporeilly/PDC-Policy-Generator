@@ -12,6 +12,17 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.3] — 2026-07-14
+
+### Added
+
+- **Reconcile progress bar**: reconcile now runs in batches of 8 terms
+  (`POST /api/reconcile {offset, limit}`) — the UI draws an exact progress
+  bar (`n/total terms`) and the results table fills in live as batches
+  return. A call without a limit still reconciles everything in one shot
+  (CLI/API compatibility). Also fixed the run-together summary line
+  ("0 missing — 44 id(s) can be applied…").
+
 ## [1.4.2] — 2026-07-14
 
 ### Changed — skipped concepts classified and color-coded by mechanism
