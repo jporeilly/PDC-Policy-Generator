@@ -104,6 +104,26 @@
   .srcfile code{font-size:12px;font-weight:700;color:var(--ink)}
   .srcfile .meta{color:var(--mute);font-size:12px}
   .srcfile button{margin-left:auto}
+  /* rule inspector + checklist */
+  .rtbl tr.expandable{cursor:pointer} .rtbl tr.expandable:hover td{background:var(--card)}
+  .insp{background:var(--card)}
+  .insp td{padding:12px 14px}
+  .insp .tester{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+  .insp .tester input{flex:1 1 220px;font-family:Consolas,monospace;font-size:12.5px}
+  .tverdict{font-size:11px;font-weight:700;padding:2px 9px;border-radius:9px;display:none}
+  .tverdict.hit{display:inline-block;background:#DCF1E4;color:#1B7A45}
+  .tverdict.miss{display:inline-block;background:#F3E3E5;color:#9A3340}
+  .valchips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0;max-height:120px;overflow:auto}
+  .valchips span{font-size:11.5px;padding:2px 8px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--mute);font-family:Consolas,monospace}
+  .insp pre{max-height:260px;overflow:auto;margin:8px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-family:Consolas,monospace;font-size:11px;line-height:1.5;color:var(--ink)}
+  .tagchip{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:9px;background:#DCE9F1;color:#065A82;margin-right:4px}
+  .ckitem{display:flex;align-items:flex-start;gap:9px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin:5px 0;background:var(--panel);font-size:13px}
+  .ckitem input{margin-top:2px}
+  .ckitem.done{opacity:.65} .ckitem.done .ckt{text-decoration:line-through}
+  .ckitem .ckh{color:var(--mute);font-size:12px;display:block}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+  .badge.verified{background:#DCF1E4;color:#1B7A45} .badge.resolved{background:#DCE9F1;color:#065A82}
+  .badge.mismatch{background:#FBEFD6;color:#9A6A18} .badge.missing{background:#F3E3E5;color:#9A3340}
   /* under the hood */
   .hoodcard>summary{cursor:pointer;font-weight:600;font-size:13.5px;list-style:none;color:var(--ink)}
   .hoodcard>summary::-webkit-details-marker{display:none}
@@ -132,7 +152,7 @@
   <div class="brand">Data Identification<br>Policy Generator<small>load · review · author · import · <span id="appver">v{{ version }}</span></small></div>
   <nav class="nav">
     <button class="on" data-page="author" onclick="showPage('author')" title="Turn the Registry's detection seeds into import-ready PDC methods"><span class="ico">&#9998;</span> Author</button>
-    <button disabled title="Roadmap — verify each concept's minted term_id (backfilled by the Glossary app's Resolve step) and bind methods to it"><span class="ico">&#128279;</span> Reconcile <span class="soon">soon</span></button>
+    <button data-page="reconcile" onclick="showPage('reconcile')" title="Verify each concept's minted term_id against a live PDC and bind methods to it — run after the glossary is imported into PDC"><span class="ico">&#128279;</span> Reconcile</button>
     <button disabled title="Roadmap — import the methods over the PDC public API (v3) and trigger DATA_IDENTIFICATION jobs, scoped to the right entities"><span class="ico">&#128640;</span> Deploy <span class="soon">soon</span></button>
     <button disabled title="Roadmap — compare deployed methods and PDC's live tag facet against the Registry's governed vocabulary; flag drift"><span class="ico">&#128270;</span> Drift-check <span class="soon">soon</span></button>
     <button data-page="settings" onclick="showPage('settings')" title="Theme and about"><span class="ico">&#9881;</span> Settings</button>
@@ -176,7 +196,7 @@
       already gathered at scan time.</p>
       <div class="fielddefs">
         <span class="fdk">Author</span><span class="fdv">turn each detection seed into an import-ready method (this page — <b>working</b>)</span>
-        <span class="fdk">Reconcile</span><span class="fdv">bind each method to the term's minted PDC <code>term_id</code> once Resolve has backfilled the Registry <i>(roadmap)</i></span>
+        <span class="fdk">Reconcile</span><span class="fdv">verify each concept's minted PDC <code>term_id</code> against a live PDC and bind authoring to the ids (the Reconcile page — <b>working</b>)</span>
         <span class="fdk">Deploy</span><span class="fdv">import methods over the public API (v3) and trigger the <code>DATA_IDENTIFICATION</code> jobs <i>(roadmap)</i></span>
         <span class="fdk">Drift-check</span><span class="fdv">compare deployed Assign-Tags + PDC's live tag facet against the Registry's governed vocabulary <i>(roadmap)</i></span>
       </div>
@@ -274,6 +294,11 @@ python -m policy_generator author -o out/ --prefix CSCU</pre></details>
         <span class="help" title="Unzip, import the methods in PDC, run Data Identification on the sources, then verify only governed tags appear. The CSCU workshop (PDC-Scenarios: courseware/CSCU/Policy/) walks the whole flow with checkpoints.">?</span></h3>
       <p class="note">Unzip, import the methods, run Data Identification on the sources, verify the
         governed tags landed. The CSCU workshop (PDC-Scenarios repo, <code>courseware/CSCU/Policy/</code>) walks the whole flow.</p>
+      <div id="checklist" style="display:none;margin-top:12px">
+        <div class="lbl">Import checklist <span class="msg" id="ckProgress"></span>
+          <span class="help" title="Ticks are saved in this browser per glossary. Steps 1–3 complete workflow step 4 (Import); steps 4–6 complete step 5 (Verify).">?</span></div>
+        <div id="ckItems"></div>
+      </div>
       <details class="hoodcard" style="margin-top:12px"><summary>Under the hood — what happens in PDC (manual today, the deploy stage tomorrow)</summary>
         <p class="note" style="margin-top:10px">Today you import through the PDC UI — the zip is shaped for exactly that.
         The <b>deploy</b> stage will run the same lifecycle over the <b>public API (v3)</b>, following the
@@ -311,6 +336,78 @@ scoped to the entities the Registry's sources[] name).</pre></details>
         <p class="note" style="margin-top:8px"><b>Verify like a steward:</b> the governed facets (<code>pci</code>, <code>aml</code>, …)
         now match columns your methods classified — and <i>only</i> governed tags appear, because the
         method set cannot introduce a stray facet. That check is the seed of the <b>drift-check</b> stage.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- ================= RECONCILE ================= -->
+  <div class="page" id="page-reconcile">
+    <h1 class="ph">Reconcile term ids against PDC</h1>
+    <p class="psub">After the glossary is imported into PDC, every governed term gets a minted <code>term_id</code>.
+      Reconcile looks each Registry concept up in PDC, verifies the ids the Registry carries, finds the ones it
+      doesn't — and binds authoring to them, so rules reference terms by id instead of by name.</p>
+
+    <div class="card">
+      <h3><span class="sn-inline">1</span> Connect to PDC
+        <span class="help" title="Authenticate once. Keycloak token endpoint first (PDC's real IdP), /api/public/<v>/auth as fallback — the same adapter the Glossary app uses. The token is held in memory for this session only; your password is never stored.">?</span></h3>
+      <div class="row" style="flex-wrap:wrap">
+        <div class="fld" style="flex:2 1 240px">
+          <label>PDC base URL <span class="help" title="The server root, e.g. https://192.168.1.200 or https://pentaho.io — a pasted Keycloak or /api/public path is cleaned up automatically">?</span></label>
+          <input type="text" id="pdcBase" placeholder="https://192.168.1.200">
+        </div>
+        <div class="fld" style="flex:1 1 120px">
+          <label>Username</label>
+          <input type="text" id="pdcUser" autocomplete="off">
+        </div>
+        <div class="fld" style="flex:1 1 120px">
+          <label>Password <span class="help" title="Sent to PDC only, never stored by the app">?</span></label>
+          <input type="password" id="pdcPass" autocomplete="new-password">
+        </div>
+        <div class="fld" style="flex:0 1 90px">
+          <label>API <span class="help" title="PDC 11 serves v1/v2/v3 side by side; v3 is its native version">?</span></label>
+          <select id="pdcVer"><option>v3</option><option>v2</option><option>v1</option></select>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;padding-bottom:9px;white-space:nowrap"
+               title="Off (default) skips certificate verification — the lab VM uses a self-signed cert"><input type="checkbox" id="pdcTls"> Verify TLS</label>
+        <button class="primary" id="pdcConnect" title="Get a bearer token and show who you are connected as">Connect</button>
+      </div>
+      <div class="chkissue" id="pdcNote"></div>
+    </div>
+
+    <div class="card">
+      <h3><span class="sn-inline">2</span> Reconcile the loaded Registry
+        <span class="help" title="Looks up every concept's business term in PDC (the same three-path lookup the Glossary app's Resolve uses) and compares with the Registry's term_id. Load a Registry on the Author page first.">?</span></h3>
+      <div class="row">
+        <button class="primary" id="recRun" disabled title="Requires a loaded Registry and a PDC connection">Reconcile</button>
+        <button class="ghost" id="recApply" disabled title="Stamp the PDC-found ids into the loaded Registry (in memory) so authoring binds by id — then re-author the zip">Use reconciled ids for authoring</button>
+        <a class="ghost" id="recExport" href="/api/registry/export" download style="display:none;text-decoration:none;padding:8px 14px" title="Download the loaded Registry with the reconciled ids stamped in — the Glossary app still owns the original file">Export reconciled registry</a>
+      </div>
+      <div class="chkissue" id="recNote"></div>
+      <div id="recTable"></div>
+      <details class="hoodcard" style="margin-top:14px"><summary>Under the hood — the PDC calls (live)</summary>
+        <p class="note" style="margin-top:10px">The lookup mirrors the Glossary app's <b>Resolve term ids</b> exactly —
+        including the hard-won rule to <b>never facet /search by type=['term']</b> (that facet means asset type and
+        returns zero hits for terms; results are matched on their own <code>type</code> field instead).</p>
+        <div class="apicalls">
+          <details class="apicall" open><summary><span class="verb post">POST</span><span class="u">{pdc}/keycloak/realms/pdc/protocol/openid-connect/token — bearer token</span></summary>
+<pre>client_id=pdc-client&grant_type=password&username=&lt;user&gt;&password=********
+(fallback: POST {pdc}/api/public/v3/auth)</pre></details>
+          <details class="apicall"><summary><span class="verb post">POST</span><span class="u">{pdc}/api/public/v3/search — look each term name up</span></summary>
+<pre>Authorization: Bearer ********
+{"searchTerm": "Member Number", "perPage": 50}
+→ a result that IS the term (type contains 'term') yields id + rootId (the glossary);
+  else any result's businessTerms[] carries {termId, glossaryId}</pre></details>
+          <details class="apicall"><summary><span class="verb post">POST</span><span class="u">{pdc}/api/public/v3/entities/filter — fallback by name</span></summary>
+<pre>Authorization: Bearer ********
+{"filters": {"names": ["Member Number"]}}   → term-typed entity → rootId</pre></details>
+        </div>
+        <div class="lbl">Statuses</div>
+        <div class="fielddefs">
+          <span class="fdk">verified</span><span class="fdv">the Registry's <code>term_id</code> matches PDC — nothing to do</span>
+          <span class="fdk">resolved</span><span class="fdv">PDC minted an id the Registry doesn't have yet (glossary imported after export) — apply to bind by id</span>
+          <span class="fdk">mismatch</span><span class="fdv">the Registry id differs from PDC (e.g. the glossary was re-imported) — apply to fix</span>
+          <span class="fdk">missing</span><span class="fdv">the term isn't in PDC — import the glossary first, or the term was renamed</span>
+        </div>
       </details>
     </div>
   </div>
@@ -404,7 +501,7 @@ async function loadRegistry(body, isForm) {
   loaded = true; authored = false;
   $('preview').disabled = $('download').disabled = false;
   $('manifest').innerHTML = ''; clearNote($('authorNote'));
-  renderPill(j.glossary || j.file); renderFlow();
+  renderPill(j.glossary || j.file); renderFlow(); recButtons();
 }
 
 $('drop').onclick = () => $('file').click();
@@ -433,25 +530,68 @@ $('loadPath').onclick = () => { if ($('path').value.trim()) loadRegistry({path: 
   } catch (e) { /* discovery is best-effort */ }
 })();
 
+let PREVIEW = [];
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
 $('preview').onclick = async () => {
   clearNote($('authorNote'));
   const r = await fetch('/api/preview', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({prefix: $('prefix').value.trim() || null})});
   const j = await r.json();
   if (!r.ok) { note($('authorNote'), 'bad', j.error || 'preview failed'); return; }
-  const row = (kind, x) => `<tr><td>${kind}</td><td><code>${x.name}</code></td><td>${x.term}</td><td><code>${x.term_id || '— by name —'}</code></td></tr>`;
+  PREVIEW = [...j.patterns, ...j.dictionaries];
+  const row = (x, i) => `<tr class="expandable" onclick="toggleInsp(${i})" title="Click to inspect this rule — the full JSON, its tags, and a live tester">
+      <td>${x.kind}</td><td><code>${esc(x.name)}</code></td><td>${esc(x.term)}</td>
+      <td><code>${x.term_id ? esc(x.term_id) : '— by name —'}</code></td></tr>
+      <tr class="insp" id="insp${i}" style="display:none"><td colspan="4"></td></tr>`;
   let html = `<table class="rtbl"><tr>
       <th title="pattern = value-format regex method; dictionary = reference-value list method">Kind</th>
-      <th title="The rule name PDC shows, with your prefix">Rule</th>
+      <th title="The rule name PDC shows, with your prefix. Click a row to inspect it.">Rule</th>
       <th title="The governed business term the method binds">Business term</th>
-      <th title="PDC's minted id when resolved; '— by name —' until the glossary is imported and Resolve re-exports the Registry">Term id</th></tr>`
-    + j.patterns.map(p => row('pattern', p)).join('')
-    + j.dictionaries.map(d => row('dictionary', d)).join('') + '</table>';
+      <th title="PDC's minted id when resolved; '— by name —' until reconciled (Reconcile page) or the Registry is re-exported after Resolve">Term id</th></tr>`
+    + PREVIEW.map((x, i) => row(x, i)).join('') + '</table>';
   if (j.skipped.length)
     html += `<div class="chkissue warn" style="display:block">${j.skipped.length} concept(s) skipped — no detection seeds, so nothing safe to author (detected by name/context only): `
-          + j.skipped.map(s => s.term).join(', ') + '</div>';
+          + j.skipped.map(s => esc(s.term)).join(', ') + '</div>';
   $('manifest').innerHTML = html;
 };
+
+function toggleInsp(i) {
+  const tr = $('insp' + i);
+  if (tr.style.display !== 'none') { tr.style.display = 'none'; return; }
+  document.querySelectorAll('tr.insp').forEach(t => t.style.display = 'none');
+  const x = PREVIEW[i], td = tr.firstElementChild;
+  let h = '';
+  h += `<div>${(x.tags || []).map(t => `<span class="tagchip" title="Governed tag this rule stamps (from the Registry allow-list)">${esc(t)}</span>`).join('')}
+        ${x.column_hint ? `<span class="msg" title="Column-name regex derived from the Registry's physical sources[]">column hint: <code>${esc(x.column_hint)}</code></span>` : ''}</div>`;
+  if (x.kind === 'pattern') {
+    h += `<div class="tester"><span class="msg">Test a value against <code>${esc(x.regex)}</code>:</span>
+          <input id="tin${i}" placeholder="e.g. CSCU-104233" onkeydown="if(event.key==='Enter')testRule(${i})">
+          <button class="ghost sm" onclick="testRule(${i})" title="Runs the content regex locally in your browser — nothing is sent anywhere">Test</button>
+          <span class="tverdict" id="tv${i}"></span></div>`;
+  } else {
+    h += `<div class="msg" style="margin:8px 0 4px" title="The reference values profiling actually saw — PDC matches similarity-weighted">${x.values_count} reference value(s)${x.values_count > x.values.length ? ` — first ${x.values.length} shown` : ''}:</div>
+          <div class="valchips">${x.values.map(v => `<span>${esc(v)}</span>`).join('')}</div>
+          <div class="tester"><span class="msg">Test a value against the list:</span>
+          <input id="tin${i}" placeholder="e.g. HIGH" onkeydown="if(event.key==='Enter')testRule(${i})">
+          <button class="ghost sm" onclick="testRule(${i})" title="Case-insensitive membership check, locally in your browser (PDC itself matches similarity-weighted, so near-misses may still hit there)">Test</button>
+          <span class="tverdict" id="tv${i}"></span></div>`;
+  }
+  h += `<details><summary class="msg" style="cursor:pointer">Full rule JSON — exactly what PDC imports</summary><pre>${esc(JSON.stringify(x.rule, null, 2))}</pre></details>`;
+  td.innerHTML = h; tr.style.display = '';
+}
+function testRule(i) {
+  const x = PREVIEW[i], v = $('tin' + i).value, out = $('tv' + i);
+  let hit = false, label = '';
+  if (x.kind === 'pattern') {
+    try { hit = new RegExp(x.regex).test(v); label = hit ? 'matches' : 'no match'; }
+    catch (e) { label = 'regex not testable in-browser'; }
+  } else {
+    hit = x.values.some(w => w.toLowerCase() === v.trim().toLowerCase());
+    label = hit ? 'in the list' : (x.values_count > x.values.length ? 'not in the first ' + x.values.length : 'not in the list');
+  }
+  out.className = 'tverdict ' + (hit ? 'hit' : 'miss'); out.textContent = label;
+}
 
 $('download').onclick = async () => {
   clearNote($('authorNote'));
@@ -462,8 +602,101 @@ $('download').onclick = async () => {
   const name = (r.headers.get('Content-Disposition') || '').match(/filename="?([^";]+)/)?.[1] || 'methods.zip';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
-  note($('authorNote'), 'ok', `Downloaded ${name} — next: unzip, then in PDC Management → Data Identification import the Patterns and the Dictionaries (each rule with its values CSV). Step 4 on the workflow bar.`);
-  authored = true; renderFlow();
+  note($('authorNote'), 'ok', `Downloaded ${name} — next: unzip, then in PDC Management → Data Identification import the Patterns and the Dictionaries (each rule with its values CSV). Step 4 on the workflow bar — the checklist in card 3 tracks it.`);
+  authored = true; renderFlow(); renderChecklist();
+  $('cardImport').scrollIntoView({behavior:'smooth'});
+};
+
+/* ---------- import checklist (suggestion: bridge the manual PDC steps) ---------- */
+const CK_ITEMS = [
+  {t:'Unzip and read INDEX.csv', h:'The review manifest — one row per method with its term and binding. Read before importing.', g:'import'},
+  {t:'Patterns imported', h:'Management → Data Identification → Patterns → Import — each out/Patterns/*.json', g:'import'},
+  {t:'Dictionaries imported (each with its values CSV)', h:'Management → Data Identification → Dictionaries → Import — the *_rule.json WITH its CSV', g:'import'},
+  {t:'Data Identification ran on the database source', h:'Data Sources → your database → run Data Identification', g:'verify'},
+  {t:'Scan Files ran on the object store', h:'PDC’s internal start-job rejects public tokens — use the UI’s Scan Files button', g:'verify'},
+  {t:'Only governed tags in the facet', h:'Search by tag: the governed facets match, and no stray facet appeared — the no-drift check', g:'verify'},
+];
+let ckState = [];
+function ckKey(){ return 'pg-checklist-' + ($('regPillTxt').textContent || 'default'); }
+function renderChecklist() {
+  try { ckState = JSON.parse(localStorage.getItem(ckKey()) || '[]'); } catch(e) { ckState = []; }
+  if (ckState.length !== CK_ITEMS.length) ckState = CK_ITEMS.map(() => false);
+  $('ckItems').innerHTML = CK_ITEMS.map((it, i) =>
+    `<label class="ckitem ${ckState[i] ? 'done' : ''}" title="${esc(it.h)}">
+       <input type="checkbox" ${ckState[i] ? 'checked' : ''} onchange="ckToggle(${i}, this.checked)">
+       <span><span class="ckt">${esc(it.t)}</span><span class="ckh">${esc(it.h)}</span></span>
+     </label>`).join('');
+  const done = ckState.filter(Boolean).length;
+  $('ckProgress').textContent = ` ${done}/${CK_ITEMS.length}`;
+  $('checklist').style.display = '';
+  const g = (grp) => CK_ITEMS.every((it, i) => it.g !== grp || ckState[i]);
+  const set = (id, on) => { const el = $(id); el.classList.remove('active','done'); if (on) el.classList.add('done'); };
+  if (authored) { set('fs4', g('import')); set('fs5', g('verify'));
+    if (!g('import')) $('fs4').classList.add('active');
+    else if (!g('verify')) $('fs5').classList.add('active'); }
+}
+function ckToggle(i, on) { ckState[i] = on; try { localStorage.setItem(ckKey(), JSON.stringify(ckState)); } catch(e){}; renderChecklist(); }
+
+/* ---------- reconcile ---------- */
+let pdcConnected = false;
+function recButtons(){ $('recRun').disabled = !(loaded && pdcConnected); }
+$('pdcConnect').onclick = async () => {
+  clearNote($('pdcNote'));
+  $('pdcConnect').disabled = true; $('pdcConnect').textContent = 'Connecting…';
+  try {
+    const r = await fetch('/api/pdc/connect', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({base_url: $('pdcBase').value, username: $('pdcUser').value,
+                            password: $('pdcPass').value, version: $('pdcVer').value,
+                            verify_tls: $('pdcTls').checked})});
+    const j = await r.json();
+    if (!r.ok) { note($('pdcNote'), 'bad', j.error || 'connect failed'); pdcConnected = false; }
+    else {
+      pdcConnected = true;
+      note($('pdcNote'), 'ok', `Connected to ${j.base} (${j.version}) as ${j.username || 'unknown'}`
+        + (j.expires_in ? ` — token expires in ${Math.round(j.expires_in/60)} min` : '')
+        + (loaded ? '' : '. Now load a Registry on the Author page, then Reconcile.'));
+      $('pdcPass').value = '';
+    }
+  } catch(e) { note($('pdcNote'), 'bad', 'connect failed: ' + e); pdcConnected = false; }
+  $('pdcConnect').disabled = false; $('pdcConnect').textContent = 'Connect';
+  recButtons();
+};
+$('recRun').onclick = async () => {
+  clearNote($('recNote')); $('recRun').disabled = true; $('recRun').textContent = 'Reconciling…';
+  try {
+    const r = await fetch('/api/reconcile', {method:'POST'});
+    const j = await r.json();
+    if (!r.ok) { note($('recNote'), 'bad', j.error || 'reconcile failed'); if (r.status === 401) pdcConnected = false; }
+    else {
+      const c = j.counts;
+      note($('recNote'), c.missing ? 'warn' : 'ok',
+        `${c.verified} verified · ${c.resolved} resolved · ${c.mismatch} mismatch · ${c.missing} missing`
+        + (c.missing ? ' — missing terms usually mean the glossary isn’t imported into PDC yet.' : '')
+        + (j.bindable ? ` ${j.bindable} id(s) can be applied for authoring.` : ''));
+      $('recTable').innerHTML = `<table class="rtbl"><tr>
+          <th>Business term</th>
+          <th title="The id the Registry carries (backfilled by the Glossary app's Resolve step)">Registry id</th>
+          <th title="The id PDC returned for this term right now">PDC id</th>
+          <th title="verified = match · resolved = PDC has an id the Registry lacks · mismatch = ids differ · missing = not found in PDC">Status</th></tr>`
+        + j.rows.map(x => `<tr><td>${esc(x.term)}${x.seeded ? '' : ' <span class="msg" title="No detection seed — this concept is not authored either way">(no seed)</span>'}</td>
+            <td><code>${x.registry_id ? esc(x.registry_id) : '—'}</code></td>
+            <td><code>${x.pdc_id ? esc(x.pdc_id) : '—'}</code></td>
+            <td><span class="badge ${x.status}">${x.status}</span></td></tr>`).join('') + '</table>';
+      $('recApply').disabled = !j.bindable;
+      $('recExport').style.display = '';
+    }
+  } catch(e) { note($('recNote'), 'bad', 'reconcile failed: ' + e); }
+  $('recRun').textContent = 'Reconcile'; recButtons();
+};
+$('recApply').onclick = async () => {
+  const r = await fetch('/api/reconcile/apply', {method:'POST'});
+  const j = await r.json();
+  if (!r.ok) { note($('recNote'), 'bad', j.error || 'apply failed'); return; }
+  note($('recNote'), 'ok', `${j.applied} term id(s) stamped into the loaded Registry (in memory) — `
+    + `${j.resolved_term_ids}/${j.concepts} concepts now id-bound. Re-author the zip on the Author page; `
+    + `Export keeps a copy of the reconciled Registry.`);
+  $('sResolved').textContent = j.resolved_term_ids;
+  $('recApply').disabled = true;
 };
 </script>
 </body>

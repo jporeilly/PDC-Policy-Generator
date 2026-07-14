@@ -12,6 +12,32 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.0] — 2026-07-14
+
+### Added — the Reconcile stage (working), rule inspector, import checklist
+
+- **Reconcile page**: connect to PDC (Keycloak-first auth with `/auth`
+  fallback — `pdc.py`, a verbatim stdlib subset of the Glossary app's
+  battle-tested client, including the never-facet-search-by-term fix), then
+  reconcile the loaded Registry: every concept's term looked up in PDC and
+  badged **verified / resolved / mismatch / missing**. One click stamps the
+  PDC ids into the loaded Registry (in memory) so re-authored rules bind by
+  id; `GET /api/registry/export` downloads the reconciled copy. The token
+  lives in memory only; passwords are never stored. Still zero dependencies
+  beyond Flask.
+- **Rule inspector**: click any preview row to expand the governed tags, the
+  column hint, the **full rule JSON exactly as PDC imports it**, and a live
+  tester — try a sample value against the pattern regex, or check membership
+  of the dictionary's reference values (shown as chips, first 200).
+- **Import checklist** on the import card, shown after a download: the six
+  workshop checkpoints (INDEX read, patterns imported, dictionaries + CSVs,
+  identification ran, Scan Files, only governed facets) with per-item help,
+  persisted per glossary in the browser; completing them drives workflow
+  steps 4 (Import) and 5 (Verify) on the stepper.
+- API: `POST /api/pdc/connect`, `POST /api/reconcile`,
+  `POST /api/reconcile/apply`, `GET /api/registry/export`; `/api/preview`
+  now returns regex/signature/column-hint/tags/values/rule per method.
+
 ## [1.3.1] — 2026-07-14
 
 ### Added

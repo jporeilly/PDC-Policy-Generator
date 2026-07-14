@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.3.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
+**Version:** 1.4.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -39,7 +39,7 @@ own split between the Business Glossary and Data Identification:
    | Stage | What it does | Status |
    | --- | --- | --- |
    | **Author** | one Data Pattern (`patternsRules` JSON) per regex seed, one Dictionary (`dictionariesRules` JSON + values CSV) per reference-list seed — each assigning the Registry's governed tags and business term | **working** |
-   | **Reconcile** | verify each concept's minted `term_id` (backfilled into the Registry by the Glossary app's Resolve step) and bind methods to it | next |
+   | **Reconcile** | verify each concept's minted `term_id` against a live PDC (Keycloak-first auth; the Glossary app's proven three-path term lookup) and bind authoring to the ids | **working** |
    | **Deploy** | import the methods over the public API (v3) and trigger `DATA_IDENTIFICATION` bulk jobs scoped to the right entities | next |
    | **Drift-check** | compare deployed methods' Assign-Tags and PDC's live tag facet against the Registry's governed vocabulary — flag methods stamping off-vocabulary tags, governed tags nothing emits, and broken term bindings | next |
 
@@ -69,6 +69,11 @@ the point of the contract. The schema is documented field-by-field in
   the exact calls each step runs — this app's own API, the manual PDC import
   path, and the deploy-stage public-API calls, badged *roadmap* until they
   ship.
+- **Reconcile** — connect to PDC (token held in memory only), look every
+  concept's term up with the Glossary app's proven three-path lookup, and see
+  verified / resolved / mismatch / missing per term. One click stamps the
+  PDC ids into the loaded Registry so re-authored rules bind **by id**;
+  export keeps a reconciled copy.
 - **Same engine on the CLI** — `python -m policy_generator info|author`,
   zero dependencies, for scripted or headless use.
 

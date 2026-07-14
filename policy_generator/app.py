@@ -20,14 +20,17 @@ sys.path.insert(0, os.path.dirname(HERE))  # run as `python app.py` from this fo
 
 from flask import Flask, jsonify, render_template, request, send_file
 
-from policy_generator import __version__, author as author_mod, registry as registry_mod
+from policy_generator import __version__, author as author_mod, pdc as pdc_mod, registry as registry_mod
 
 app = Flask(__name__)
 APP_VERSION = __version__
 
 # Single-user local app: the last loaded Registry is the working state,
-# same model as the Glossary app's in-memory review rows.
-_state = {"reg": None, "name": None}
+# same model as the Glossary app's in-memory review rows. The PDC token is
+# held in memory for this session only — never saved.
+_state = {"reg": None, "name": None,
+          "pdc": None,            # {base, version, verify_tls, token}
+          "reconcile": None}      # last reconcile rows (for apply)
 
 
 @app.get("/")
@@ -122,13 +125,139 @@ def api_preview():
         art = author_mod.author(_state["reg"], prefix=prefix)
     except registry_mod.RegistryError as e:
         return jsonify({"error": str(e)}), 400
+    def _pat(p):
+        r = p["rule"][0]
+        return {"name": r["name"], "term": p["term"], "term_id": p.get("term_id") or None,
+                "kind": "pattern",
+                "regex": (r.get("contentRegex") or [{}])[0].get("regex"),
+                "signature": (r.get("contentPatterns") or [{}])[0].get("pattern") if r.get("contentPatterns") else None,
+                "column_hint": (r.get("columnNameRegex") or [{}])[0].get("regex") if r.get("columnNameRegex") else None,
+                "tags": [t["k"] for a in r.get("actions", []) for t in a.get("applyTags", [])],
+                "rule": p["rule"]}
+
+    def _dic(d):
+        r = d["rule"][0]
+        values = [v for v in d["csv"].splitlines()[1:] if v]
+        return {"name": r["name"], "term": d["term"], "term_id": d.get("term_id") or None,
+                "kind": "dictionary",
+                "values": values[:200], "values_count": len(values),
+                "column_hint": (r.get("columnNameRegex") or [{}])[0].get("regex") if r.get("columnNameRegex") else None,
+                "tags": [t["k"] for a in r.get("actions", []) for t in a.get("applyTags", [])],
+                "rule": d["rule"]}
+
     return jsonify({
-        "patterns": [{"name": p["rule"][0]["name"], "term": p["term"],
-                      "term_id": p.get("term_id") or None} for p in art["patterns"]],
-        "dictionaries": [{"name": d["rule"][0]["name"], "term": d["term"],
-                          "term_id": d.get("term_id") or None} for d in art["dictionaries"]],
+        "patterns": [_pat(p) for p in art["patterns"]],
+        "dictionaries": [_dic(d) for d in art["dictionaries"]],
         "skipped": art["skipped"],
     })
+
+
+# --------------------------------------------------------------------------- #
+#  Reconcile — verify/bind term ids against a live PDC
+# --------------------------------------------------------------------------- #
+@app.post("/api/pdc/connect")
+def api_pdc_connect():
+    """Authenticate once (Keycloak-first, /auth fallback). The token lives in
+    memory for this session only; the password is never stored."""
+    b = request.get_json(silent=True) or {}
+    base = (b.get("base_url") or "").strip()
+    if not base:
+        return jsonify({"error": "PDC base URL is required (e.g. https://192.168.1.200)"}), 400
+    version = (b.get("version") or "v3").strip()
+    verify = bool(b.get("verify_tls"))
+    token = (b.get("token") or "").strip()
+    try:
+        if not token:
+            if not (b.get("username") and b.get("password")):
+                return jsonify({"error": "username + password (or a bearer token) required"}), 400
+            token = pdc_mod.auth(base, b["username"], b["password"], version=version,
+                                 verify_tls=verify, realm=(b.get("realm") or "pdc"))
+    except Exception as e:
+        return jsonify({"error": f"authentication failed: {e}"}), 400
+    _state["pdc"] = {"base": pdc_mod.clean_base(base), "version": version,
+                     "verify_tls": verify, "token": token}
+    who = pdc_mod.decode_jwt(token)
+    return jsonify({"ok": True, "base": _state["pdc"]["base"], "version": version,
+                    "username": who.get("username"), "roles": who.get("roles", [])[:8],
+                    "expires_in": who.get("expires_in")})
+
+
+@app.post("/api/reconcile")
+def api_reconcile():
+    """Look up every concept's term in PDC and compare with the Registry's
+    term_id: verified / mismatch / resolved (new id found) / missing."""
+    if _state["reg"] is None:
+        return jsonify({"error": "load a Registry first"}), 400
+    if not _state["pdc"]:
+        return jsonify({"error": "connect to PDC first"}), 400
+    p = _state["pdc"]
+    concepts = [c for c in _state["reg"].get("concepts", []) if isinstance(c, dict)]
+    names = [c.get("term_name") for c in concepts if c.get("term_name")]
+    try:
+        found = pdc_mod.resolve_terms(p["base"], p["token"], names,
+                                      version=p["version"], verify_tls=p["verify_tls"])
+    except pdc_mod.TokenExpired:
+        _state["pdc"] = None
+        return jsonify({"error": "PDC session expired — connect again"}), 401
+    except Exception as e:
+        return jsonify({"error": f"PDC lookup failed: {e}"}), 502
+    rows, counts = [], {"verified": 0, "mismatch": 0, "resolved": 0, "missing": 0}
+    for c in concepts:
+        name = c.get("term_name") or ""
+        reg_id = c.get("term_id") or None
+        hit = found.get(name) or {}
+        pdc_id = hit.get("id")
+        if pdc_id and reg_id and str(pdc_id) == str(reg_id):
+            status = "verified"
+        elif pdc_id and reg_id:
+            status = "mismatch"
+        elif pdc_id:
+            status = "resolved"
+        else:
+            status = "missing"
+        counts[status] += 1
+        rows.append({"term": name, "registry_id": reg_id, "pdc_id": pdc_id,
+                     "glossary_id": hit.get("glossaryId"), "status": status,
+                     "seeded": bool(c.get("detect"))})
+    _state["reconcile"] = rows
+    return jsonify({"rows": rows, "counts": counts,
+                    "bindable": counts["resolved"] + counts["mismatch"]})
+
+
+@app.post("/api/reconcile/apply")
+def api_reconcile_apply():
+    """Stamp the PDC-found term ids into the loaded Registry (in memory) so
+    authoring binds by id. The Registry FILE is owned by the Glossary app —
+    export the reconciled copy if you want to keep it."""
+    if _state["reg"] is None or not _state["reconcile"]:
+        return jsonify({"error": "run reconcile first"}), 400
+    by_name = {r["term"]: r for r in _state["reconcile"] if r.get("pdc_id")}
+    applied = 0
+    gid = None
+    for c in _state["reg"].get("concepts", []):
+        r = by_name.get((c or {}).get("term_name"))
+        if r and str(c.get("term_id") or "") != str(r["pdc_id"]):
+            c["term_id"] = r["pdc_id"]
+            applied += 1
+        if r and r.get("glossary_id"):
+            gid = gid or r["glossary_id"]
+    if gid and not _state["reg"].get("glossary_id"):
+        _state["reg"]["glossary_id"] = gid
+    s = registry_mod.summary(_state["reg"])
+    s["applied"] = applied
+    return jsonify(s)
+
+
+@app.get("/api/registry/export")
+def api_registry_export():
+    """The loaded (possibly reconciled) Registry as JSON — keep it beside the
+    Glossary app's copy, or diff it."""
+    if _state["reg"] is None:
+        return jsonify({"error": "load a Registry first"}), 400
+    return app.response_class(json.dumps(_state["reg"], indent=2),
+                              mimetype="application/json",
+                              headers={"Content-Disposition":
+                                       "attachment; filename=registry.reconciled.json"})
 
 
 if __name__ == "__main__":
