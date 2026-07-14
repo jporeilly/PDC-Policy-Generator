@@ -12,6 +12,31 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.3.0] — 2026-07-14
+
+### Changed — same look and feel as the Glossary Generator
+
+The web UI is now a true sibling of the Glossary app, built from its design
+system (same CSS variables and components):
+
+- **Sidebar** with the brand block (app name + `load · review · author ·
+  import · vX.Y.Z`), nav — Author active; Reconcile / Deploy / Drift-check
+  visible but disabled with *soon* badges and tooltips explaining each
+  future stage — and a **Registry status pill** (green dot + glossary name
+  once loaded).
+- **Workflow stepper** (the Glossary app's `flow` component): Load →
+  Review → Author → Import (PDC) → Verify (PDC), live done/active states
+  driven by app state, each step tooltip'd; clicking scrolls to its card.
+- **Four themes** (light / teal / pentaho / dark — identical palettes to the
+  Glossary app), picked on a new **Settings page**, persisted in
+  localStorage. Serif page/card headings with the gradient accents,
+  identical buttons, fields, notes, tables.
+- **Many more tooltips**: `?` help circles and title tooltips on every
+  control, stat tile, table header, nav item and workflow step (35+),
+  plus workflow explanations — an intro "How this app fits" panel and
+  step-by-step guidance in the result messages (e.g. the download toast
+  points at workflow step 4).
+
 ## [1.2.2] — 2026-07-14
 
 ### Changed — flat PDC-Demo layout
