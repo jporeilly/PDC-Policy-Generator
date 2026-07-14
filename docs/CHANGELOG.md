@@ -12,6 +12,14 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.3.1] — 2026-07-14
+
+### Added
+
+- **Favicon** (`static/favicon.svg`, served at `/favicon.svg` and
+  `/favicon.ico`): a governance shield with a check, in the app's navy/teal
+  palette — the shield is the policy, the check is the Registry allow-list.
+
 ## [1.3.0] — 2026-07-14
 
 ### Changed — same look and feel as the Glossary Generator

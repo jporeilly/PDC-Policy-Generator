@@ -35,6 +35,12 @@ def index():
     return render_template("index.html", version=APP_VERSION)
 
 
+@app.get("/favicon.svg")
+@app.get("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.svg")
+
+
 @app.get("/api/version")
 def version():
     return jsonify({"version": APP_VERSION, "service": "policy-generator"})

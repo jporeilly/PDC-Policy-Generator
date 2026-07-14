@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.3.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
+**Version:** 1.3.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
