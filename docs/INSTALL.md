@@ -38,6 +38,20 @@ calls in the author stage. All it needs is Python and a Registry file.
 regexes, profiled value lists) was already gathered by the Glossary app's
 scan and travels inside the Registry.
 
+## The standard topology — where everything runs
+
+| Where | What runs there | One-command install/update |
+| --- | --- | --- |
+| **Windows host** (bare metal) | both apps — the Glossary Generator (:5000, Ollama here) and this app (:5001) — plus the vertical's courseware and domain pack | PowerShell: `iex "& { $(irm https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.ps1) } CSCU"` |
+| **Ubuntu VM** (192.168.1.200) | PDC 11.0.0 itself + the demo lab (Postgres 5433, MinIO) | `curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.sh \| bash -s -- CSCU` then `cd ~/PDC-Demo/PDC-Scenarios && make scenario ID=CSCU` |
+
+Both bootstraps live in the PDC-Scenarios repo, remember the selected
+vertical, and are safe to re-run (that *is* the update path). The workflow
+after install: register the sources in PDC (the Glossary app's bulk loader,
+`datasources.csv`), scan → review → govern → Generate in the Glossary app
+(writes the Registry), then this app authors the Data Identification methods
+from it — the CSCU workshop walks every step with checkpoints.
+
 ## Part A — Get the repository
 
 ```sh
