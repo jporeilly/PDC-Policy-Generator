@@ -12,6 +12,15 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.1.3] — 2026-07-14
+
+### Changed — the VM install is app-only
+
+- `install-into-pdc-demo.sh` now **sparse-clones** (`--filter=blob:none
+  --sparse`, checkout set to `policy_generator/`): the lab VM gets the app
+  and root files only — courseware and docs never land on the deployment.
+  Updates remain plain fast-forward pulls; existing full clones keep working.
+
 ## [1.1.2] — 2026-07-14
 
 ### Changed

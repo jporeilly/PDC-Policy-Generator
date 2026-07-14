@@ -4,8 +4,9 @@
 #
 # PDC-Demo is the Glossary repo's checkout (it holds glossary_generator/ and
 # data_sources/). This script checks that folder exists, then:
-#   - first run:  clones PDC-Policy-Generator into it (and excludes it from
-#                 the outer repo's `git status`)
+#   - first run:  SPARSE-clones PDC-Policy-Generator into it — only the app
+#                 (policy_generator/ + root files); courseware and docs stay
+#                 off the VM — and excludes it from the outer `git status`
 #   - thereafter: pulls the latest (fast-forward only)
 # and finishes with the offline selftest, so you know the app is healthy.
 #
@@ -62,9 +63,10 @@ if [ -d "$TARGET/.git" ]; then
 elif [ -e "$TARGET" ]; then
   die "$TARGET exists but is not a git clone — move it aside and re-run."
 else
-  printf "  ${DIM}first run — cloning…${RS}\n"
-  git -C "$DEMO" clone "$REPO_URL" "$APP_DIR_NAME"
-  ok "Cloned to $TARGET"
+  printf "  ${DIM}first run — sparse clone (app only)…${RS}\n"
+  git -C "$DEMO" clone --filter=blob:none --sparse "$REPO_URL" "$APP_DIR_NAME"
+  git -C "$TARGET" sparse-checkout set policy_generator
+  ok "Cloned to $TARGET (policy_generator/ only — courseware/docs stay off the VM)"
   # A nested repo shows as untracked in the outer checkout — exclude it there.
   if [ -d "$DEMO/.git" ] && ! grep -qx "$APP_DIR_NAME/" "$DEMO/.git/info/exclude" 2>/dev/null; then
     echo "$APP_DIR_NAME/" >> "$DEMO/.git/info/exclude"

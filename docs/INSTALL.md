@@ -54,8 +54,10 @@ folder and keep the whole lab in one place; git treats a nested repo as a
 single untracked directory, the two never interfere.
 
 **The easy way** — one script handles both the first install and every later
-update (checks the folder, clones or fast-forward-pulls, excludes the nested
-repo from the outer `git status`, runs the selftest):
+update (checks the folder, **sparse-clones only the app** — `policy_generator/`
+plus root files; courseware and docs stay off the VM — or fast-forward-pulls
+on re-runs, excludes the nested repo from the outer `git status`, runs the
+selftest):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash

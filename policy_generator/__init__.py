@@ -15,7 +15,7 @@ def _app_version():
                 return v
     except Exception:
         pass
-    return "1.1.2"
+    return "1.1.3"
 
 
 __version__ = _app_version()
