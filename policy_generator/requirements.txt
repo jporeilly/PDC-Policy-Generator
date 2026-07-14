@@ -1,0 +1,3 @@
+flask>=3.0
+# The author stage is fully offline — no other dependencies.
+# reconcile / deploy / drift-check will add: requests>=2.31 (PDC public API v3)

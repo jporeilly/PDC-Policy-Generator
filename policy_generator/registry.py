@@ -18,6 +18,20 @@ class RegistryError(ValueError):
     """The file is not a usable Classification Registry."""
 
 
+def validate_registry(reg) -> dict:
+    """Validate an already-parsed Registry envelope. Returns the dict; raises
+    RegistryError with a plain-language reason when the envelope is wrong."""
+    if not isinstance(reg, dict):
+        raise RegistryError("top level must be a JSON object")
+    if reg.get("schema") != SCHEMA:
+        raise RegistryError(
+            f"schema is {reg.get('schema')!r}, expected {SCHEMA!r} — is this a "
+            "file the Glossary Generator wrote to registries/?")
+    if not isinstance(reg.get("concepts"), list):
+        raise RegistryError("missing concepts[] — an empty glossary was exported?")
+    return reg
+
+
 def load_registry(path: str) -> dict:
     """Read + validate a Registry file. Returns the dict; raises RegistryError
     with a plain-language reason when the envelope is wrong."""
@@ -28,15 +42,7 @@ def load_registry(path: str) -> dict:
         raise RegistryError(f"no such file: {path}")
     except json.JSONDecodeError as e:
         raise RegistryError(f"not valid JSON ({e})")
-    if not isinstance(reg, dict):
-        raise RegistryError("top level must be a JSON object")
-    if reg.get("schema") != SCHEMA:
-        raise RegistryError(
-            f"schema is {reg.get('schema')!r}, expected {SCHEMA!r} — is this a "
-            "file the Glossary Generator wrote to registries/?")
-    if not isinstance(reg.get("concepts"), list):
-        raise RegistryError("missing concepts[] — an empty glossary was exported?")
-    return reg
+    return validate_registry(reg)
 
 
 def governed_tags(reg: dict) -> set:

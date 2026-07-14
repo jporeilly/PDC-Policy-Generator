@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDC Policy Generator</title>
+<style>
+  :root {
+    --teal:#1C7293; --ink:#14333F; --sub:#065A82; --label:#5B7782;
+    --bord:#C9DEE8; --hdr:#EEF6FA; --code:#F4F7F9; --amber:#8A6D1A;
+    --amberbg:#FFF7E0; --ok:#1E7B4D; --warn:#A15C00; --err:#A02020; --mute:#5B7782;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 "Segoe UI",system-ui,sans-serif; color:var(--ink); background:#FBFDFE; }
+  header { border-bottom:3px solid var(--teal); background:#fff; padding:18px 28px; }
+  header .eyebrow { font-size:11px; letter-spacing:.18em; font-weight:700; color:var(--teal); text-transform:uppercase; }
+  header h1 { margin:2px 0 0; font-size:22px; }
+  header h1 small { color:var(--label); font-weight:400; font-size:14px; margin-left:8px; }
+  .stages { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+  .stage { font-size:12px; font-weight:600; padding:2px 10px; border-radius:99px; border:1px solid var(--bord); color:var(--label); }
+  .stage.live { background:var(--teal); border-color:var(--teal); color:#fff; }
+  main { max-width:880px; margin:26px auto; padding:0 20px; }
+  .card { background:#fff; border:1px solid var(--bord); border-radius:8px; padding:20px 24px; margin-bottom:18px; }
+  .card h2 { margin:0 0 4px; font-size:16px; color:var(--sub); }
+  .card p.hint { margin:0 0 14px; color:var(--label); font-size:13px; }
+  .drop { border:2px dashed var(--bord); border-radius:8px; padding:26px; text-align:center; color:var(--label); cursor:pointer; transition:.15s; }
+  .drop.over { border-color:var(--teal); background:var(--hdr); }
+  .row { display:flex; gap:10px; margin-top:12px; }
+  input[type=text] { flex:1; padding:8px 10px; border:1px solid var(--bord); border-radius:6px; font:inherit; }
+  button { padding:8px 18px; border:0; border-radius:6px; background:var(--teal); color:#fff; font:600 14px/1.4 inherit; cursor:pointer; }
+  button.ghost { background:var(--hdr); color:var(--sub); border:1px solid var(--bord); }
+  button:disabled { opacity:.45; cursor:default; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:14px; }
+  .stat { background:var(--hdr); border:1px solid var(--bord); border-radius:8px; padding:10px 14px; }
+  .stat .k { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--label); font-weight:700; }
+  .stat .v { font-size:22px; font-weight:700; color:var(--sub); }
+  .note { margin-top:12px; padding:10px 14px; border-radius:6px; font-size:13px; display:none; }
+  .note.warn { display:block; background:var(--amberbg); border:1px solid #E4C55C; color:var(--warn); }
+  .note.err  { display:block; background:#FDF0F0; border:1px solid #E3B4B4; color:var(--err); }
+  .note.ok   { display:block; background:#EFF8F2; border:1px solid #BFE0CC; color:var(--ok); }
+  table { border-collapse:collapse; width:100%; margin-top:12px; font-size:13px; }
+  th,td { border:1px solid var(--bord); padding:6px 10px; text-align:left; }
+  th { background:var(--hdr); color:var(--sub); }
+  td.mono, .mono { font-family:Consolas,monospace; font-size:12.5px; color:#0A5560; }
+  code { font-family:Consolas,monospace; font-size:12.5px; color:#0A5560; background:var(--code); padding:1px 5px; border-radius:4px; }
+  footer { text-align:center; color:var(--label); font-size:12px; padding:18px; }
+
+  /* --- "Under the hood" explainers (same components as the Glossary app) --- */
+  .hoodcard > summary { cursor:pointer; font-weight:600; font-size:13.5px; list-style:none; color:var(--sub); }
+  .hoodcard > summary::-webkit-details-marker { display:none; }
+  .hoodcard > summary::before { content:"\25b8"; color:var(--label); display:inline-block; margin-right:9px; }
+  .hoodcard[open] > summary::before { content:"\25be"; }
+  details.card.hoodcard { padding:14px 20px; }
+  .hoodcard .inner { margin-top:10px; }
+  .fielddefs { display:grid; grid-template-columns:max-content 1fr; gap:7px 18px; margin:10px 0 6px; font-size:13px; align-items:baseline; }
+  .fielddefs .fdk { font-weight:700; color:var(--ink); white-space:nowrap; }
+  .fielddefs .fdv { color:var(--mute); line-height:1.5; }
+  .lbl { font-size:10.5px; font-weight:700; color:var(--mute); text-transform:uppercase; letter-spacing:.04em; margin:14px 0 4px; }
+  .apicall { border:1px solid var(--bord); border-radius:8px; margin:6px 0; background:#fff; }
+  .apicall > summary { cursor:pointer; display:flex; align-items:center; gap:9px; padding:7px 11px; list-style:none; font-size:13px; }
+  .apicall > summary::-webkit-details-marker { display:none; }
+  .apicall .u { font-family:Consolas,monospace; font-size:12px; color:var(--ink); word-break:break-all; }
+  .apicall .verb { font-family:Consolas,monospace; font-size:10.5px; font-weight:700; border-radius:6px; padding:2px 7px; color:#fff; flex:0 0 auto; }
+  .verb.post { background:#2563A8; } .verb.get { background:#1B7A45; }
+  .verb.ui { background:#7A5BA6; } .verb.cli { background:#5B6470; }
+  .apicall pre { margin:0; padding:10px 12px; border-top:1px solid var(--bord); background:var(--code); font:12px/1.55 Consolas,monospace; color:#0A3D52; overflow:auto; white-space:pre; }
+  .apicall .badge { font-size:10px; font-weight:700; color:var(--amber); background:var(--amberbg); border:1px solid #E4C55C; border-radius:6px; padding:1px 6px; flex:0 0 auto; }
+  .copybtn { margin-left:auto; padding:2px 10px; font-size:11px; background:var(--hdr); color:var(--sub); border:1px solid var(--bord); }
+  .hoodnote { font-size:12.5px; color:var(--mute); margin:6px 0 0; line-height:1.55; }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Pentaho Data Catalog 11.0.0 · Data Identification</div>
+  <h1>Policy Generator <small>v{{ version }} · Classification Registry → PDC methods</small></h1>
+  <div class="stages">
+    <span class="stage live">Author</span>
+    <span class="stage">Reconcile</span>
+    <span class="stage">Deploy</span>
+    <span class="stage">Drift-check</span>
+  </div>
+</header>
+<main>
+
+  <details class="card hoodcard"><summary>What this app is — and why the Registry exists</summary>
+    <div class="inner">
+      <p class="hoodnote">In PDC, the same three facts about a column — <b>which business term</b> it maps to,
+      <b>what tags</b> it carries, and <b>how sensitive</b> it is — get decided in more than one place.
+      The <b>Glossary Generator</b> owns the reviewed vocabulary; at export it writes a
+      <b>Classification Registry</b>: one row per governed concept carrying the term, the governed tags,
+      the sensitivity, and the <b>detection seeds</b> its scan induced from profiled data
+      (value-format regexes like <code>^CSCU-\d{6}$</code>, profiled reference-value lists).
+      <b>This app reads that Registry</b> and authors PDC's Data Identification methods from it —
+      so the term a method binds and the tags it stamps can never quietly diverge from the glossary.
+      Everything runs locally and deterministically: <b>no LLM, no network</b> — the evidence was
+      already gathered at scan time.</p>
+      <div class="fielddefs">
+        <span class="fdk">Author</span><span class="fdv">turn each detection seed into an import-ready method (this page — <b>working</b>)</span>
+        <span class="fdk">Reconcile</span><span class="fdv">bind each method to the term's minted PDC <code>term_id</code> once Resolve has backfilled the Registry <i>(roadmap)</i></span>
+        <span class="fdk">Deploy</span><span class="fdv">import methods over the public API (v3) and trigger the <code>DATA_IDENTIFICATION</code> jobs <i>(roadmap)</i></span>
+        <span class="fdk">Drift-check</span><span class="fdv">compare deployed Assign-Tags + PDC's live tag facet against the Registry's governed vocabulary <i>(roadmap)</i></span>
+      </div>
+    </div>
+  </details>
+
+  <div class="card">
+    <h2>1 · Load the Registry</h2>
+    <p class="hint">The file the Glossary Generator wrote at Generate time —
+      <span class="mono">glossary_generator/registries/registry.&lt;glossary-uuid&gt;.json</span></p>
+    <div class="drop" id="drop">Drop the registry JSON here, or click to choose a file</div>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+    <div class="row">
+      <input type="text" id="path" placeholder="…or a local path, e.g. c:\Projects\PDC-Glossary\glossary_generator\registries\registry.&lt;uuid&gt;.json">
+      <button class="ghost" id="loadPath">Load path</button>
+    </div>
+    <div class="note" id="loadNote"></div>
+    <div class="grid" id="stats" style="display:none">
+      <div class="stat"><div class="k">Concepts</div><div class="v" id="sConcepts">–</div></div>
+      <div class="stat"><div class="k">With seeds</div><div class="v" id="sSeeded">–</div></div>
+      <div class="stat"><div class="k">Resolved term ids</div><div class="v" id="sResolved">–</div></div>
+      <div class="stat"><div class="k">Governed tags</div><div class="v" id="sTags">–</div></div>
+    </div>
+
+    <details class="hoodcard" style="margin-top:12px"><summary>What the summary numbers mean</summary>
+      <div class="inner">
+        <div class="fielddefs">
+          <span class="fdk">Concepts</span><span class="fdv">kept, steward-reviewed terms in the exported glossary — one Registry row each</span>
+          <span class="fdk">With seeds</span><span class="fdv">concepts whose scan produced evidence to author from: an induced value-format regex (<code>{type:"pattern"}</code>) or a profiled reference-value list (<code>{type:"dictionary"}</code>). Only these become methods — a concept detected by name alone has nothing safe to author, and guessing is exactly what this pipeline avoids.</span>
+          <span class="fdk">Resolved term ids</span><span class="fdv">concepts whose <code>term_id</code> PDC has minted. <b>0 is normal before glossary import</b>: import the glossary in PDC, run the Glossary app's <b>Resolve term ids</b>, re-export — until then rules bind the business term <b>by name</b>, which PDC accepts.</span>
+          <span class="fdk">Governed tags</span><span class="fdv">the Registry's embedded <code>tag_vocabulary.allow_list</code> — lower-case, the same list that drives the Glossary app's tagging. Authoring re-filters every rule's tags against it; that is the no-drift guarantee.</span>
+          <span class="fdk">Off-vocabulary</span><span class="fdv">tags that escaped the allow-list on the glossary side. Fix them there (Dictionary page) — authoring refuses them rather than letting a stray facet into PDC.</span>
+        </div>
+        <p class="hoodnote">Loading is read-only and local: the file is parsed, the
+        <code>classification-registry/1</code> envelope validated, nothing is written and nothing leaves your machine.
+        The full contract is documented field-by-field in <code>docs/CONTRACT.md</code>.</p>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>2 · Author the method set</h2>
+    <p class="hint">One Data Pattern per regex seed, one Dictionary (+ values CSV) per
+      reference-list seed — tags re-filtered against the Registry's governed allow-list.</p>
+    <div class="row">
+      <input type="text" id="prefix" placeholder="Rule-name prefix (default: first word of the glossary name, e.g. CSCU)">
+      <button class="ghost" id="preview" disabled>Preview</button>
+      <button id="download" disabled>Author &amp; download zip</button>
+    </div>
+    <div class="note" id="authorNote"></div>
+    <div id="manifest"></div>
+
+    <details class="hoodcard" style="margin-top:12px"><summary>Under the hood — how a seed becomes a method</summary>
+      <div class="inner">
+        <p class="hoodnote">Every emitted file is the exact shape PDC's
+        <b>Management → Data Identification → Import</b> accepts — the same fields the CSCU
+        Technical Track (Module 03) teaches, so a steward can read every rule.</p>
+        <div class="fielddefs">
+          <span class="fdk">name</span><span class="fdv">prefixed (e.g. <code>CSCU Member Number</code>) so your methods group together in PDC's method list</span>
+          <span class="fdk">column hint</span><span class="fdv">a column-name regex derived from the Registry's physical <code>sources[]</code> — the real columns the steward mapped, not a guess from the term</span>
+          <span class="fdk">contentPatterns</span><span class="fdv">the induced value signature (e.g. <code>^CSCU-\d{6}$</code>), built from profiled sample values at scan time (position signatures, ≥90% share)</span>
+          <span class="fdk">dictionary CSV</span><span class="fdv">the reference values profiling actually saw (risk ratings, SAR statuses, account types) — similarity-weighted matching in PDC</span>
+          <span class="fdk">applyTags</span><span class="fdv">the concept's governed tags, <b>re-filtered against the allow-list at authoring time</b> — always lower-case (tags are search facets; case variants would fragment them)</span>
+          <span class="fdk">assignBusinessTerm</span><span class="fdv">the governed term — by <code>term_id</code> when resolved, by name until then</span>
+          <span class="fdk">INDEX.csv</span><span class="fdv">the review manifest: kind, rule name, file, term, term_id — read it before importing anything</span>
+        </div>
+        <div class="lbl">Calls executed (this app, local)</div>
+        <details class="apicall"><summary><span class="verb post">POST</span><span class="u">/api/preview — the manifest, nothing written</span><button class="copybtn" onclick="copyCall(event,this)">Copy</button></summary>
+<pre>POST /api/preview
+Content-Type: application/json
+
+{"prefix": "CSCU"}</pre></details>
+        <details class="apicall"><summary><span class="verb post">POST</span><span class="u">/api/author — the same set as one zip download</span><button class="copybtn" onclick="copyCall(event,this)">Copy</button></summary>
+<pre>POST /api/author
+Content-Type: application/json
+
+{"prefix": "CSCU"}
+
+→ 200 application/zip
+   Patterns/&lt;prefix&gt;_&lt;term&gt;.json
+   Dictionaries/&lt;prefix&gt;_&lt;term&gt;_rule.json + &lt;prefix&gt;_&lt;term&gt;.csv
+   INDEX.csv</pre></details>
+        <details class="apicall"><summary><span class="verb cli">CLI</span><span class="u">python -m policy_generator author — identical engine, no server</span><button class="copybtn" onclick="copyCall(event,this)">Copy</button></summary>
+<pre>python -m policy_generator author registry.&lt;uuid&gt;.json -o out/ --prefix CSCU
+python -m policy_generator info   registry.&lt;uuid&gt;.json</pre></details>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>3 · Import into PDC &amp; run identification</h2>
+    <p class="hint">Unzip, import the methods, run Data Identification on the sources, verify the
+      governed tags landed. The CSCU workshop (<span class="mono">courseware/CSCU/</span>) walks the whole flow.</p>
+
+    <details class="hoodcard"><summary>Under the hood — what happens in PDC (manual today, the deploy stage tomorrow)</summary>
+      <div class="inner">
+        <p class="hoodnote">Today you import through the PDC UI — the zip is shaped for exactly that.
+        The <b>deploy</b> stage will run the same lifecycle over the <b>public API (v3)</b>, following the
+        Glossary app's proven adapter (Bearer auth; individual job endpoint first, bulk
+        <code>/jobs/execute/bulk</code> fallback on 404/405).</p>
+        <div class="lbl">Manual path (PDC UI)</div>
+        <details class="apicall" open><summary><span class="verb ui">UI</span><span class="u">Management → Data Identification → Patterns → Import</span></summary>
+<pre>Import each out/Patterns/*.json
+The rule appears under your prefix; review name, column hint, content pattern,
+Assign-Tags and the business term before saving.</pre></details>
+        <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Management → Data Identification → Dictionaries → Import</span></summary>
+<pre>Import each out/Dictionaries/*_rule.json WITH its values CSV.
+The CSV is the reference list PDC matches against (similarity-weighted).</pre></details>
+        <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Run Data Identification on the sources</span></summary>
+<pre>Data Sources → (your database) → run Data Identification
+Object store → Scan Files
+Note: PDC's internal /api/start-job rejects public API tokens (401) —
+scanning files from outside the UI is not a supported path.</pre></details>
+        <div class="lbl">Deploy stage (roadmap — the app will run these for you)</div>
+        <details class="apicall"><summary><span class="verb post">POST</span><span class="badge">roadmap</span><span class="u">{pdc}/api/public/v3/… — import the method set</span></summary>
+<pre>Authorization: Bearer ********
+The authored patternsRules / dictionariesRules JSON is already the import
+payload shape — deploy submits what you reviewed here, unchanged.</pre></details>
+        <details class="apicall"><summary><span class="verb post">POST</span><span class="badge">roadmap</span><span class="u">{pdc}/api/public/v3/jobs/execute/… — trigger DATA_IDENTIFICATION, scoped</span></summary>
+<pre>Authorization: Bearer ********
+Individual job endpoint first; on 404/405 fall back to
+POST /api/public/v3/jobs/execute/bulk  (jobType: DATA_IDENTIFICATION,
+scoped to the entities the Registry's sources[] name).</pre></details>
+        <details class="apicall"><summary><span class="verb get">GET</span><span class="badge">roadmap</span><span class="u">{pdc}/api/public/v3/jobs/{jobId}/status — poll until COMPLETED</span></summary>
+<pre>Authorization: Bearer ********</pre></details>
+        <p class="hoodnote"><b>Verify like a steward:</b> the governed facets (<code>pci</code>, <code>aml</code>, …)
+        now match columns your methods classified — and <i>only</i> governed tags appear, because the
+        method set cannot introduce a stray facet. That check is the seed of the <b>drift-check</b> stage.</p>
+      </div>
+    </details>
+  </div>
+
+</main>
+<footer>Policy Generator v{{ version }} — reads <span class="mono">classification-registry/1</span> ·
+  offline &amp; deterministic (no LLM) · reconcile · deploy · drift-check are the roadmap.</footer>
+<script>
+const $ = id => document.getElementById(id);
+let loaded = false;
+
+function note(el, cls, msg) { el.className = "note " + cls; el.textContent = msg; }
+function clearNote(el) { el.className = "note"; el.textContent = ""; }
+function copyCall(ev, btn) {
+  ev.preventDefault();
+  const pre = btn.closest("details").querySelector("pre");
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    btn.textContent = "Copied"; setTimeout(() => btn.textContent = "Copy", 1200);
+  });
+}
+
+async function loadRegistry(body, isForm) {
+  clearNote($("loadNote")); $("stats").style.display = "none";
+  const r = await fetch("/api/load", isForm ? {method:"POST", body}
+      : {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if (!r.ok) { note($("loadNote"), "err", j.error || "load failed"); return; }
+  $("sConcepts").textContent = j.concepts; $("sSeeded").textContent = j.seeded;
+  $("sResolved").textContent = j.resolved_term_ids; $("sTags").textContent = j.governed_tags;
+  $("stats").style.display = "";
+  let msg = `Loaded ${j.file} — glossary “${j.glossary}” (${j.glossary_id || "id unresolved"}).`;
+  let cls = "ok";
+  if (j.off_vocabulary) { cls = "warn"; msg += ` ⚠ ${j.off_vocabulary} concept(s) carry off-vocabulary tags — fix in the Glossary app; authoring refuses them.`; }
+  else if (!j.resolved_term_ids) { cls = "warn"; msg += " No resolved term ids yet — rules bind terms by name until the glossary is imported and Resolve re-exports the Registry."; }
+  note($("loadNote"), cls, msg);
+  loaded = true; $("preview").disabled = $("download").disabled = false;
+  $("manifest").innerHTML = ""; clearNote($("authorNote"));
+}
+
+$("drop").onclick = () => $("file").click();
+$("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = e => {
+  e.preventDefault(); $("drop").classList.remove("over");
+  if (e.dataTransfer.files.length) sendFile(e.dataTransfer.files[0]);
+};
+$("file").onchange = () => { if ($("file").files.length) sendFile($("file").files[0]); };
+function sendFile(f) { const fd = new FormData(); fd.append("registry", f); loadRegistry(fd, true); }
+$("loadPath").onclick = () => { if ($("path").value.trim()) loadRegistry({path: $("path").value.trim()}); };
+
+$("preview").onclick = async () => {
+  clearNote($("authorNote"));
+  const r = await fetch("/api/preview", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({prefix: $("prefix").value.trim() || null})});
+  const j = await r.json();
+  if (!r.ok) { note($("authorNote"), "err", j.error || "preview failed"); return; }
+  const row = (kind, x) => `<tr><td>${kind}</td><td class="mono">${x.name}</td><td>${x.term}</td><td class="mono">${x.term_id || "— by name —"}</td></tr>`;
+  let html = `<table><tr><th>Kind</th><th>Rule</th><th>Business term</th><th>Term id</th></tr>`
+    + j.patterns.map(p => row("pattern", p)).join("")
+    + j.dictionaries.map(d => row("dictionary", d)).join("") + "</table>";
+  if (j.skipped.length)
+    html += `<div class="note warn" style="display:block">${j.skipped.length} concept(s) skipped (no detection seeds): `
+          + j.skipped.map(s => s.term).join(", ") + "</div>";
+  $("manifest").innerHTML = html;
+};
+
+$("download").onclick = async () => {
+  clearNote($("authorNote"));
+  const r = await fetch("/api/author", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({prefix: $("prefix").value.trim() || null})});
+  if (!r.ok) { const j = await r.json(); note($("authorNote"), "err", j.error || "author failed"); return; }
+  const blob = await r.blob();
+  const name = (r.headers.get("Content-Disposition") || "").match(/filename="?([^";]+)/)?.[1] || "methods.zip";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  note($("authorNote"), "ok", `Downloaded ${name} — import under Management → Data Identification.`);
+};
+</script>
+</body>
+</html>

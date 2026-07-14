@@ -1,4 +1,7 @@
 * text=auto
+
+# Shell scripts must stay LF — a CRLF run.sh breaks on the lab VM
+*.sh text eol=lf
 *.png binary
 *.zip binary
 *.pdf binary
