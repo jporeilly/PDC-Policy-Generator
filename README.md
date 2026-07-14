@@ -93,8 +93,9 @@ install-pdc-demo.sh  install/update the app inside the lab VM's
 **Requirements:** Python 3.9+. PDC is reached only when *you* import and run
 the methods — the app itself stays offline. **No LLM.**
 
-The full guide — including cloning into the lab VM's `~/PDC-Demo` Glossary
-checkout, or the one-script VM install (`install-pdc-demo.sh`) — is
+On the lab VM, the **whole lab** (both apps + the selected vertical) is one
+bootstrap — PDC-Scenarios' `install-pdc-demo.sh` — and this repo's own
+`install-pdc-demo.sh` updates just this app + vertical. The full guide is
 [docs/INSTALL.md](docs/INSTALL.md) (also as
 [docs/lab-setup.docx](docs/lab-setup.docx)). The short version:
 

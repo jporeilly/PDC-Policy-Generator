@@ -53,8 +53,17 @@ holds `data_sources/` (the lab + scenario scripts) and `glossary_generator/`
 folder and keep the whole lab in one place; git treats a nested repo as a
 single untracked directory, the two never interfere.
 
-**The easy way** — one script handles both the first install and every later
-update. It checks the folder, **sparse-clones only the app** —
+**The whole lab in one command** — PDC-Scenarios' bootstrap stands up
+`~/PDC-Demo` with the Glossary app, **this app**, and the selected vertical,
+then `make scenario ID=<ID>` there loads the data sources:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.sh | bash -s -- CSCU
+cd ~/PDC-Demo/PDC-Scenarios && make scenario ID=CSCU
+```
+
+**Just this app** — this repo's script handles both the first install and
+every later update. It checks the folder, **sparse-clones only the app** —
 `policy_generator/` plus root files — or fast-forward-pulls on re-runs,
 excludes the nested repo from the outer `git status`, and runs the selftest.
 Pass a vertical (`CSCU`/`RETAIL`/`HEALTH`/`MFG`) and it also clones/updates
