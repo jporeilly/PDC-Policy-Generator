@@ -51,7 +51,18 @@ On the lab VM, `~/PDC-Demo` is the **Glossary repo's checkout** — it already
 holds `data_sources/` (the lab + scenario scripts) and `glossary_generator/`
 (the app). This repo is self-contained, so you can clone it **inside** that
 folder and keep the whole lab in one place; git treats a nested repo as a
-single untracked directory, the two never interfere:
+single untracked directory, the two never interfere.
+
+**The easy way** — one script handles both the first install and every later
+update (checks the folder, clones or fast-forward-pulls, excludes the nested
+repo from the outer `git status`, runs the selftest):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash
+# or, from a checkout:  ./install-into-pdc-demo.sh [/path/to/PDC-Demo]
+```
+
+**By hand**, the equivalent on Ubuntu 24.04:
 
 ```sh
 cd ~/PDC-Demo
@@ -60,6 +71,9 @@ echo "PDC-Policy-Generator/" >> .git/info/exclude   # keep the Glossary repo's `
 cd PDC-Policy-Generator/policy_generator
 bash run.sh --host 0.0.0.0        # VM checkouts may lack exec bits — bash, not ./
 ```
+
+(Already cloned? `git -C ~/PDC-Demo/PDC-Policy-Generator pull` — or just
+re-run the script.)
 
 `--host 0.0.0.0` binds all interfaces so the UI is reachable from the
 Windows host at `http://192.168.1.200:5001`. Cloned here, the app also

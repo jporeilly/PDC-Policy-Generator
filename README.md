@@ -84,6 +84,8 @@ docs/
   lab-setup.docx        the same guide in the course design, generated
 courseware/             one workshop set per scenario (CSCU today), same
   CSCU/                 course design + docx builder as the Glossary repo
+install-into-pdc-demo.sh  install/update the app inside the lab VM's
+                        ~/PDC-Demo Glossary checkout (clone or pull + selftest)
 ```
 
 ## Install & run
@@ -92,7 +94,8 @@ courseware/             one workshop set per scenario (CSCU today), same
 the methods — the app itself stays offline. **No LLM.**
 
 The full guide — including cloning into the lab VM's `~/PDC-Demo` Glossary
-checkout — is [docs/INSTALL.md](docs/INSTALL.md) (also as
+checkout, or the one-script VM install (`install-into-pdc-demo.sh`) — is
+[docs/INSTALL.md](docs/INSTALL.md) (also as
 [docs/lab-setup.docx](docs/lab-setup.docx)). The short version:
 
 ```bash

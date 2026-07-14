@@ -33,6 +33,15 @@ single source of truth — the web UI banner and
 - **CLI**: `info` and `author` now take the registry path as optional — when
   omitted, the newest discovered Registry is used (and announced).
 
+### Added — VM installer script
+
+- **`install-into-pdc-demo.sh`** (repo root): install/update the app inside
+  the lab VM's `~/PDC-Demo` Glossary checkout — verifies the folder, clones
+  on first run (into `PDC-Policy-Generator/`, excluded from the outer repo's
+  `git status`) or fast-forward-pulls thereafter, prints the app version and
+  runs the offline selftest. Works as a curl one-liner on a fresh VM;
+  `POLICY_REPO_URL` / `PDC_DEMO_DIR` overrides for forks and odd layouts.
+
 ### Added — install & lab-setup guide
 
 - **`docs/INSTALL.md`** — the authoritative setup master: overview,
