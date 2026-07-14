@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.1.2 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
+**Version:** 1.2.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -82,10 +82,10 @@ docs/
   CHANGELOG.md          release history
   INSTALL.md            install & lab-setup guide (markdown master)
   lab-setup.docx        the same guide in the course design, generated
-courseware/             one workshop set per scenario (CSCU today), same
-  CSCU/                 course design + docx builder as the Glossary repo
+  tools/                builds docs/lab-setup.docx from INSTALL.md
 install-into-pdc-demo.sh  install/update the app inside the lab VM's
-                        ~/PDC-Demo Glossary checkout (clone or pull + selftest)
+                        ~/PDC-Demo checkout + pull the selected vertical's
+                        courseware from PDC-Scenarios (clone or pull + selftest)
 ```
 
 ## Install & run
@@ -119,14 +119,14 @@ python -m policy_generator.selftest                # offline self-test (20 check
 
 ## Courseware
 
-[`courseware/`](courseware/) mirrors the Glossary repo's per-scenario workshop
-sets: the CSCU set carries
-[Workshop-Policy-Generator-CSCU.md](courseware/CSCU/Workshop-Policy-Generator-CSCU.md)
-(the authoritative markdown master) and its generated `.docx`
-(`courseware/CSCU/tools/build-docx.py`, same course design and template). It
-picks up where the Glossary Generator's CSCU app workshop ends — at the
-Registry hand-off — and walks Registry → `info` → `author` → PDC import →
-run Data Identification → verify, with checkpoints.
+This app's workshops live in the **[PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios)**
+repo, separated per app within each vertical: `courseware/<ID>/Policy/`
+(beside `Platform/` and `Glossary/`). The CSCU set's
+`Workshop-Policy-Generator-CSCU.md` picks up where the Glossary Generator's
+CSCU app workshop ends — at the Registry hand-off — and walks Registry →
+`info` → `author` → PDC import → run Data Identification → verify, with
+checkpoints. `select-vertical.sh <ID>` there pulls just one vertical;
+this repo's `install-into-pdc-demo.sh <ID>` does it for you on the VM.
 
 ## Documentation
 
@@ -136,7 +136,7 @@ run Data Identification → verify, with checkpoints.
 | [docs/lab-setup.docx](docs/lab-setup.docx) | The same guide in the course design (generated from INSTALL.md) |
 | [docs/CONTRACT.md](docs/CONTRACT.md) | The `classification-registry/1` schema and the guarantees both apps share |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release history (the app version lives in `policy_generator/VERSION`) |
-| [courseware/](courseware/) | One workshop set per scenario (CSCU today; RETAIL/HEALTH/MFG plug in the same way) |
+| [PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios) | Every vertical's data kit, domain pack and courseware — this app's workshops under `courseware/<ID>/Policy/` |
 
 The shared lab (PDC VM, demo PostgreSQL + MinIO, scenario loads) is owned by
 the Glossary repo — its `data_sources/lab/lab-setup.docx` (Parts A–I) is the

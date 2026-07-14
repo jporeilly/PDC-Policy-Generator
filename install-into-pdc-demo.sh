@@ -12,7 +12,13 @@
 #
 #   ./install-into-pdc-demo.sh                     # uses ~/PDC-Demo
 #   ./install-into-pdc-demo.sh /path/to/PDC-Demo   # explicit location
+#   ./install-into-pdc-demo.sh CSCU                # ALSO pull that vertical's
+#                                                  # courseware (PDC-Scenarios)
 #   PDC_DEMO_DIR=/srv/PDC-Demo ./install-into-pdc-demo.sh
+#
+# Verticals: with a PDC-Scenarios checkout in PDC-Demo, the currently
+# selected vertical is detected from its sparse state and refreshed on every
+# run; pass an ID (CSCU/RETAIL/HEALTH/MFG) to select or switch.
 #
 # One-liner on a fresh VM (no checkout of this repo needed):
 #   curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash
@@ -33,7 +39,13 @@ ok(){   printf "  ${GREEN}✓${RS} %s\n" "$1"; }
 warn(){ printf "  ${YELLOW}!${RS} %s\n" "$1"; }
 die(){  printf "  ${RED}✗ %s${RS}\n" "$1" >&2; exit 1; }
 
-DEMO="${1:-${PDC_DEMO_DIR:-$HOME/PDC-Demo}}"
+DEMO="${PDC_DEMO_DIR:-$HOME/PDC-Demo}"
+VERTICAL="${VERTICAL:-}"
+for arg in "$@"; do
+  if [ -d "$arg" ]; then DEMO="$arg"
+  else VERTICAL="$(printf '%s' "$arg" | tr '[:lower:]' '[:upper:]')"
+  fi
+done
 
 printf "\n${TEAL}${B}  Policy Generator — install into PDC-Demo${RS}\n"
 printf "${DIM}  Clone or update ${APP_DIR_NAME} inside the lab checkout.${RS}\n\n"
@@ -89,6 +101,40 @@ if [ -n "$PY" ]; then
   fi
 else
   warn "Python 3 not found — install it before running the app"
+fi
+echo
+
+# --- vertical courseware (PDC-Scenarios) -------------------------------------
+printf "${B}  Vertical courseware (PDC-Scenarios)${RS}\n"
+SCEN_URL="${SCENARIOS_REPO_URL:-https://github.com/jporeilly/PDC-Scenarios.git}"
+SCEN_DIR="$DEMO/PDC-Scenarios"
+if [ ! -d "$SCEN_DIR/.git" ] && [ -n "$VERTICAL" ]; then
+  printf "  ${DIM}cloning PDC-Scenarios (sparse, %s only)…${RS}\n" "$VERTICAL"
+  # --no-checkout: never materialize the full tree — set the sparse paths
+  # first, then check out only the selected vertical (+ shared lab)
+  git -C "$DEMO" clone -q --filter=blob:none --no-checkout "$SCEN_URL" PDC-Scenarios
+  git -C "$SCEN_DIR" sparse-checkout set "data_sources/lab" "data_sources/$VERTICAL" "courseware/$VERTICAL" "diagrams"
+  git -C "$SCEN_DIR" checkout -q
+  if [ -d "$DEMO/.git" ] && ! grep -qx "PDC-Scenarios/" "$DEMO/.git/info/exclude" 2>/dev/null; then
+    echo "PDC-Scenarios/" >> "$DEMO/.git/info/exclude"
+  fi
+fi
+if [ -d "$SCEN_DIR/.git" ]; then
+  git -C "$SCEN_DIR" pull -q --ff-only >/dev/null 2>&1 || warn "PDC-Scenarios pull failed (local changes?)"
+  # which vertical is selected? the sparse set has data_sources/<ID> beside lab
+  CUR="$(git -C "$SCEN_DIR" sparse-checkout list 2>/dev/null | sed -n 's#^data_sources/##p' | grep -v '^lab$' | head -1 || true)"
+  [ -n "$VERTICAL" ] || VERTICAL="$CUR"
+  if [ -n "$VERTICAL" ]; then
+    if (cd "$SCEN_DIR" && bash select-vertical.sh "$VERTICAL" >/dev/null); then
+      ok "Vertical $VERTICAL — courseware/$VERTICAL + data kit pulled"
+    else
+      warn "select-vertical.sh $VERTICAL failed — is '$VERTICAL' a valid scenario id?"
+    fi
+  else
+    warn "No vertical selected yet — pick one: $0 CSCU   (or RETAIL/HEALTH/MFG)"
+  fi
+else
+  warn "No PDC-Scenarios checkout — pass a vertical to set one up: $0 CSCU"
 fi
 echo
 

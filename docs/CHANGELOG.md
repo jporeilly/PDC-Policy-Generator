@@ -12,6 +12,24 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.2.0] — 2026-07-14
+
+### Changed — courseware moved to PDC-Scenarios; the installer is vertical-aware
+
+- **Courseware moved out**: this app's workshops now live in the
+  [PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios) repo,
+  separated per app within each vertical (`courseware/<ID>/Policy/` beside
+  `Platform/` and `Glossary/`). The repo keeps `docs/tools/` (the Word-guide
+  builder) so `docs/lab-setup.docx` still regenerates from `INSTALL.md`.
+- **`install-into-pdc-demo.sh` is vertical-aware**: pass a vertical
+  (`CSCU`/`RETAIL`/`HEALTH`/`MFG`) and it clones/updates PDC-Scenarios beside
+  the app — sparse, `--no-checkout` first so only the selected vertical's
+  data kit + courseware ever touch disk — and re-runs detect the selected
+  vertical from the sparse state and refresh it. The Glossary repo gained a
+  twin script; either keeps the shared PDC-Scenarios checkout fresh.
+- Docs + UI swept for the new courseware home (README, INSTALL.md, the
+  import-step hint on the web UI).
+
 ## [1.1.3] — 2026-07-14
 
 ### Changed — the VM install is app-only

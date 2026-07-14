@@ -29,7 +29,7 @@ calls in the author stage. All it needs is Python and a Registry file.
 | What | Why | Where it comes from |
 | --- | --- | --- |
 | **Python 3.9+** on the host | runs the app (the launchers check this) | python.org — on Windows tick *Add to PATH* |
-| **The shared lab + a scenario** (e.g. CSCU) | the data estate PDC scans and identifies | the Glossary repo's guide: `PDC-Glossary-Generator/data_sources/lab/lab-setup.docx` (Parts A–I) — the one-time build of the PDC VM, network, lab stack and scenario load |
+| **The shared lab + a vertical** (e.g. CSCU) | the data estate PDC scans and identifies | the [PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios) repo — `select-vertical.sh <ID>` pulls it; its `data_sources/lab/lab-setup.docx` (Parts A–I) is the one-time VM/lab build guide |
 | **A Classification Registry** | the only input the author stage needs | written by the Glossary Generator at Generate time: `glossary_generator/registries/registry.<glossary-uuid>.json` |
 | **PDC 11.0.0 reachable over HTTPS** | to import the methods and run Data Identification | the lab VM (e.g. `https://pentaho.io` on `192.168.1.200`) |
 | A PDC user allowed to import under **Management → Data Identification** | the import step | Workshop 0 (Preflight) of the scenario's courseware |
@@ -54,14 +54,16 @@ folder and keep the whole lab in one place; git treats a nested repo as a
 single untracked directory, the two never interfere.
 
 **The easy way** — one script handles both the first install and every later
-update (checks the folder, **sparse-clones only the app** — `policy_generator/`
-plus root files; courseware and docs stay off the VM — or fast-forward-pulls
-on re-runs, excludes the nested repo from the outer `git status`, runs the
-selftest):
+update. It checks the folder, **sparse-clones only the app** —
+`policy_generator/` plus root files — or fast-forward-pulls on re-runs,
+excludes the nested repo from the outer `git status`, and runs the selftest.
+Pass a vertical (`CSCU`/`RETAIL`/`HEALTH`/`MFG`) and it also clones/updates
+**PDC-Scenarios** beside the app and sparse-pulls just that vertical's data
+kit and courseware; bare re-runs detect the selected vertical and refresh it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash
-# or, from a checkout:  ./install-into-pdc-demo.sh [/path/to/PDC-Demo]
+curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash -s -- CSCU
+# or, from a checkout:  ./install-into-pdc-demo.sh [/path/to/PDC-Demo] [VERTICAL]
 ```
 
 **By hand**, the equivalent on Ubuntu 24.04:
@@ -96,7 +98,7 @@ works identically — nothing in the app assumes a location.)
 | `policy_generator/` | the app: engine (`registry.py`, `author.py`), CLI, web UI (`app.py` + `templates/`), launchers, `VERSION` |
 | `docs/CONTRACT.md` | the `classification-registry/1` schema, field by field |
 | `docs/CHANGELOG.md` | version history (the app version lives in `policy_generator/VERSION`) |
-| `courseware/CSCU/` | the CSCU workshop set for this app (+ the Word-guide builder in `tools/`) |
+| `docs/tools/` | the Word-guide builder that regenerates `docs/lab-setup.docx` (the workshops live in the PDC-Scenarios repo under `courseware/<ID>/Policy/`) |
 | `docs/INSTALL.md` | this guide — the markdown master `docs/lab-setup.docx` is generated from |
 
 ## Part B — Run the web UI
@@ -166,7 +168,7 @@ are git-ignored and survive updates.
 
 The authored zip is shaped for PDC's UI import — the full walkthrough with
 checkpoints is the CSCU workshop
-(`courseware/CSCU/Workshop-Policy-Generator-CSCU.md`). In short:
+(PDC-Scenarios' `courseware/CSCU/Policy/Workshop-Policy-Generator-CSCU.md`). In short:
 
 1. **Management → Data Identification → Patterns → Import** — the files
    under `Patterns/`.

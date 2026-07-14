@@ -3,14 +3,14 @@
 # Cambria 56 title, teal divider, label/value meta block, EEF6FA-headed
 # tables with padded cells, real restarting step numbering, teal callouts,
 # amber screenshot drop-boxes, embedded diagrams.
-# Ported from PDC-Glossary-Generator courseware/CSCU/tools for the Policy
-# Generator workshop set; same template, same course design.
+# Builds docs/lab-setup.docx from docs/INSTALL.md (the markdown master).
+# The workshop builders live in the PDC-Scenarios repo; same template/design.
 import io, os, re, zipfile
 from PIL import Image
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template.docx")
-CW = os.path.join(ROOT, "courseware", "CSCU")
+CW = ROOT  # doc paths below are repo-root relative
 
 TEAL = "1C7293"; GRAY = "5B7886"; LABEL = "5B7782"; INK = "14333F"; SUB = "065A82"
 CELLBORD = "C9DEE8"; HDRFILL = "EEF6FA"; CODEFILL = "F4F7F9"
@@ -365,14 +365,7 @@ E1T = "PENTAHO DATA CATALOG 11.0.0  ·  TECHNICAL TRACK"
 DS = "Copper State Credit Union (cscu_core + cscu-documents)"
 
 DOCS = [
- ("Workshop-Policy-Generator-CSCU.md", "Workshop-Policy-Generator-CSCU.docx",
-  dict(eyebrow1=E1T, eyebrow2="PDC PROCESS  ·  POLICY GENERATOR", label="APP WORKSHOP",
-       title="Author Data Identification with the Policy Generator",
-       subtitle="Turn the Registry's detection seeds into import-ready PDC patterns and dictionaries — governed tags, governed terms, no drift.",
-       meta=[("Primary role", "Data Steward / Data Developer"), ("Estimated time", "45–60 minutes"),
-             ("Dataset", DS)],
-       header="App Workshop: Policy Generator")),
- ("../../docs/INSTALL.md", "../../docs/lab-setup.docx",
+ ("docs/INSTALL.md", "docs/lab-setup.docx",
   dict(eyebrow1=E1T, eyebrow2="PDC PROCESS  ·  INSTALL & LAB SETUP", label="SETUP GUIDE",
        title="Install & Lab Setup",
        subtitle="Stand up the Policy Generator — web UI, CLI and selftest — and connect it to the shared PDC lab.",
