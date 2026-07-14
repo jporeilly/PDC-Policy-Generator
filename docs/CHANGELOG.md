@@ -12,6 +12,14 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.2.1] — 2026-07-14
+
+### Fixed
+
+- Registry auto-discovery now also probes `PDC-Demo/glossary_generator/`
+  from a **sibling** position, so cloning the app beside `~/PDC-Demo` (in
+  the home directory) discovers the Registry exactly like the nested layout.
+
 ## [1.2.0] — 2026-07-14
 
 ### Changed — courseware moved to PDC-Scenarios; the installer is vertical-aware

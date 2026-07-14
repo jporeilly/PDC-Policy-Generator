@@ -61,6 +61,7 @@ def discover_registries() -> list:
         candidates.append(env)
     candidates += [
         os.path.join(parent, "glossary_generator", "registries"),
+        os.path.join(parent, "PDC-Demo", "glossary_generator", "registries"),
         os.path.join(parent, "PDC-Glossary", "glossary_generator", "registries"),
         os.path.join(parent, "PDC-Glossary-Generator", "glossary_generator", "registries"),
     ]
