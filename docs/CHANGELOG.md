@@ -12,6 +12,19 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.4] — 2026-07-14
+
+### Changed
+
+- **Rule-tester examples are now derived from each rule** instead of a
+  hardcoded `CSCU-104233`: patterns get a sample **synthesized from their
+  own regex** (a small exemplar generator handling literals, escapes,
+  classes, groups/alternation and quantifiers — every generated example is
+  verified against the regex before use, e.g. `^LN\-\d{6}$` → `LN-104233`,
+  the SSN shape → `104-23-3958`, email → `ac@me.sa`); dictionaries use their
+  first reference value. Falls back to a neutral placeholder for shapes the
+  generator doesn't understand.
+
 ## [1.4.3] — 2026-07-14
 
 ### Added
