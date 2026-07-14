@@ -66,6 +66,10 @@ glossary since, re-Generate first — export time is the latest reviewed state.
 python -m policy_generator info path/to/registry.<uuid>.json
 ```
 
+(When this repo is cloned into the same folder as `glossary_generator/` —
+the lab VM's `~/PDC-Demo` layout — you can omit the path: the newest
+Registry is auto-discovered, in the CLI and on the web UI's Load card.)
+
 `info` prints what the Registry carries before you author anything: the
 glossary name and id, concept count, how many concepts carry detection seeds,
 how many have **resolved term ids**, and the governed-tag count.

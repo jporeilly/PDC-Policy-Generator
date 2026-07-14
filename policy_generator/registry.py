@@ -9,7 +9,9 @@ schema. Loading is strict about the envelope (schema id, concepts list) and
 tolerant about optional per-concept fields, so older Registries still load.
 """
 from __future__ import annotations
+import glob
 import json
+import os
 
 SCHEMA = "classification-registry/1"
 
@@ -43,6 +45,31 @@ def load_registry(path: str) -> dict:
     except json.JSONDecodeError as e:
         raise RegistryError(f"not valid JSON ({e})")
     return validate_registry(reg)
+
+
+def discover_registries() -> list:
+    """Find Registry files the Glossary Generator wrote, no configuration
+    needed. Looks (in order) at POLICY_REGISTRY_DIR, then for a
+    glossary_generator/registries/ folder in this repo's parent — the layout
+    when PDC-Policy is cloned inside the Glossary checkout (~/PDC-Demo) — and
+    finally in sibling Glossary checkouts. Newest first."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root
+    parent = os.path.dirname(root)                # the folder the repo was cloned into
+    candidates = []
+    env = os.environ.get("POLICY_REGISTRY_DIR")
+    if env:
+        candidates.append(env)
+    candidates += [
+        os.path.join(parent, "glossary_generator", "registries"),
+        os.path.join(parent, "PDC-Glossary", "glossary_generator", "registries"),
+        os.path.join(parent, "PDC-Glossary-Generator", "glossary_generator", "registries"),
+    ]
+    found = []
+    for d in candidates:
+        if os.path.isdir(d):
+            found += glob.glob(os.path.join(d, "registry.*.json"))
+    uniq = sorted({os.path.abspath(p) for p in found}, key=os.path.getmtime, reverse=True)
+    return uniq
 
 
 def governed_tags(reg: dict) -> set:

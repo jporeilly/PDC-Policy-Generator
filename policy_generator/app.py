@@ -40,6 +40,26 @@ def version():
     return jsonify({"version": APP_VERSION, "service": "policy-generator"})
 
 
+@app.get("/api/registries")
+def api_registries():
+    """Registries auto-discovered from a co-located Glossary checkout
+    (nested ~/PDC-Demo clone, sibling checkout, or POLICY_REGISTRY_DIR)."""
+    import datetime
+    out = []
+    for p in registry_mod.discover_registries()[:20]:
+        item = {"path": p, "file": os.path.basename(p),
+                "modified": datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y-%m-%d %H:%M")}
+        try:
+            with open(p, encoding="utf-8") as f:
+                reg = registry_mod.validate_registry(json.load(f))
+            item["glossary"] = reg.get("glossary")
+            item["concepts"] = len(reg.get("concepts") or [])
+        except Exception:
+            item["glossary"] = None  # unreadable/foreign file: listed, not loadable
+        out.append(item)
+    return jsonify({"registries": out})
+
+
 def _load_from_request():
     """Accept the Registry as an uploaded file (`registry`) or a local path."""
     if "registry" in request.files:

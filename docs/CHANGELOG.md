@@ -12,6 +12,34 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.1.2] — 2026-07-14
+
+### Added — Registry auto-discovery (clone beside the Glossary app, zero config)
+
+- `registry.discover_registries()`: probes `POLICY_REGISTRY_DIR`, then the
+  repo's parent folder for `glossary_generator/registries/registry.*.json` —
+  the layout when PDC-Policy is cloned **inside** the Glossary checkout
+  (the lab VM's `~/PDC-Demo`) — then sibling `PDC-Glossary`/
+  `PDC-Glossary-Generator` checkouts. Newest first.
+- **Web UI**: `GET /api/registries` + a "Found on this machine" picker on the
+  Load card (glossary name, concept count, modified time, one-click Load);
+  a single match loads automatically.
+- **CLI**: `info` and `author` now take the registry path as optional — when
+  omitted, the newest discovered Registry is used (and announced).
+
+### Added — install & lab-setup guide
+
+- **`INSTALL.md`** (repo root) — the authoritative setup master: overview,
+  prerequisites (pointing at the Glossary repo's `lab-setup.docx` Parts A–I
+  for the shared lab), Part A get the repo (including cloning inside the lab
+  VM's `~/PDC-Demo` Glossary checkout as a nested repo, with the
+  `.git/info/exclude` hygiene line), Part B web UI, Part C CLI, Part D
+  selftest verification, Part E updating, Part F the PDC import side,
+  Part G troubleshooting.
+- **`lab-setup.docx`** (repo root) — generated from `INSTALL.md` by
+  `courseware/CSCU/tools/build-docx.py` (new DOCS entry; markdown master
+  stays authoritative), Word-COM verified.
+
 ## [1.1.1] — 2026-07-14
 
 ### Added — the engine and CLI

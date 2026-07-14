@@ -107,7 +107,11 @@
     <h2>1 · Load the Registry</h2>
     <p class="hint">The file the Glossary Generator wrote at Generate time —
       <span class="mono">glossary_generator/registries/registry.&lt;glossary-uuid&gt;.json</span></p>
-    <div class="drop" id="drop">Drop the registry JSON here, or click to choose a file</div>
+    <div id="found" style="display:none">
+      <div class="lbl" style="margin-top:0">Found on this machine — from the co-located Glossary app</div>
+      <div id="foundList"></div>
+    </div>
+    <div class="drop" id="drop" style="margin-top:10px">Drop the registry JSON here, or click to choose a file</div>
     <input type="file" id="file" accept=".json,application/json" hidden>
     <div class="row">
       <input type="text" id="path" placeholder="…or a local path, e.g. c:\Projects\PDC-Glossary\glossary_generator\registries\registry.&lt;uuid&gt;.json">
@@ -133,6 +137,11 @@
         <p class="hoodnote">Loading is read-only and local: the file is parsed, the
         <code>classification-registry/1</code> envelope validated, nothing is written and nothing leaves your machine.
         The full contract is documented field-by-field in <code>docs/CONTRACT.md</code>.</p>
+        <p class="hoodnote"><b>Auto-discovery:</b> when this repo is cloned into the same folder as the
+        Glossary app (e.g. inside <code>~/PDC-Demo</code>, which holds <code>glossary_generator/</code>) —
+        or beside a Glossary checkout — the app finds
+        <code>glossary_generator/registries/registry.*.json</code> by itself and lists them above,
+        newest first. Set <code>POLICY_REGISTRY_DIR</code> to point anywhere else.</p>
       </div>
     </details>
   </div>
@@ -274,6 +283,22 @@ $("drop").ondrop = e => {
 $("file").onchange = () => { if ($("file").files.length) sendFile($("file").files[0]); };
 function sendFile(f) { const fd = new FormData(); fd.append("registry", f); loadRegistry(fd, true); }
 $("loadPath").onclick = () => { if ($("path").value.trim()) loadRegistry({path: $("path").value.trim()}); };
+
+(async function discover() {
+  try {
+    const j = await (await fetch("/api/registries")).json();
+    const rs = (j.registries || []).filter(r => r.glossary);
+    if (!rs.length) return;
+    $("foundList").innerHTML = rs.map(r =>
+      `<div style="display:flex;align-items:center;gap:10px;border:1px solid var(--bord);border-radius:8px;padding:7px 11px;margin:5px 0;font-size:13px">
+         <span class="mono" style="word-break:break-all">${r.file}</span>
+         <span style="color:var(--label)">“${r.glossary}” · ${r.concepts} concepts · ${r.modified}</span>
+         <button class="ghost" style="margin-left:auto;padding:3px 14px" onclick='loadRegistry({path:${JSON.stringify(r.path)}})'>Load</button>
+       </div>`).join("");
+    $("found").style.display = "";
+    if (rs.length === 1) loadRegistry({path: rs[0].path});   // one match: just load it
+  } catch (e) { /* discovery is best-effort */ }
+})();
 
 $("preview").onclick = async () => {
   clearNote($("authorNote"));

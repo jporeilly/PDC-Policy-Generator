@@ -15,8 +15,23 @@ import argparse, io, sys
 from . import __version__, author as author_mod, registry as registry_mod
 
 
+def _resolve_registry(path):
+    """The given path, or the newest auto-discovered Registry (a co-located
+    Glossary checkout: nested ~/PDC-Demo clone, sibling repo, or
+    POLICY_REGISTRY_DIR) when none was given."""
+    if path:
+        return path
+    found = registry_mod.discover_registries()
+    if not found:
+        raise registry_mod.RegistryError(
+            "no registry given and none found — pass a path, or clone this repo "
+            "beside/inside the Glossary checkout, or set POLICY_REGISTRY_DIR")
+    print(f"using {found[0]} (auto-discovered, newest of {len(found)})")
+    return found[0]
+
+
 def _cmd_info(args):
-    reg = registry_mod.load_registry(args.registry)
+    reg = registry_mod.load_registry(_resolve_registry(args.registry))
     s = registry_mod.summary(reg)
     print(f"Classification Registry — {s['glossary']} (glossary_id: {s['glossary_id'] or 'unresolved'})")
     print(f"  concepts:            {s['concepts']}")
@@ -30,7 +45,7 @@ def _cmd_info(args):
 
 
 def _cmd_author(args):
-    reg = registry_mod.load_registry(args.registry)
+    reg = registry_mod.load_registry(_resolve_registry(args.registry))
     art = author_mod.author(reg, prefix=args.prefix)
     np, nd, ns = len(art["patterns"]), len(art["dictionaries"]), len(art["skipped"])
     if args.zip:
@@ -66,11 +81,13 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("info", help="print what a Registry carries")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                   help="registry file (default: newest auto-discovered from a co-located Glossary checkout)")
     p.set_defaults(fn=_cmd_info)
 
     p = sub.add_parser("author", help="emit importable pattern/dictionary files from the Registry")
-    p.add_argument("registry")
+    p.add_argument("registry", nargs="?", default=None,
+                   help="registry file (default: newest auto-discovered from a co-located Glossary checkout)")
     p.add_argument("-o", "--out", default="out", help="output directory (default: out/)")
     p.add_argument("--prefix", default=None, help="rule-name prefix (default: first word of the glossary name)")
     p.add_argument("--zip", default=None, help="write one zip instead of a directory")
