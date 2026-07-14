@@ -62,8 +62,8 @@ Pass a vertical (`CSCU`/`RETAIL`/`HEALTH`/`MFG`) and it also clones/updates
 kit and courseware; bare re-runs detect the selected vertical and refresh it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash -s -- CSCU
-# or, from a checkout:  ./install-into-pdc-demo.sh [/path/to/PDC-Demo] [VERTICAL]
+curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-pdc-demo.sh | bash -s -- CSCU
+# or, from a checkout:  ./install-pdc-demo.sh [/path/to/PDC-Demo] [VERTICAL]
 ```
 
 **By hand**, the equivalent on Ubuntu 24.04:

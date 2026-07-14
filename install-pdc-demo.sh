@@ -10,18 +10,18 @@
 #   - thereafter: pulls the latest (fast-forward only)
 # and finishes with the offline selftest, so you know the app is healthy.
 #
-#   ./install-into-pdc-demo.sh                     # uses ~/PDC-Demo
-#   ./install-into-pdc-demo.sh /path/to/PDC-Demo   # explicit location
-#   ./install-into-pdc-demo.sh CSCU                # ALSO pull that vertical's
+#   ./install-pdc-demo.sh                     # uses ~/PDC-Demo
+#   ./install-pdc-demo.sh /path/to/PDC-Demo   # explicit location
+#   ./install-pdc-demo.sh CSCU                # ALSO pull that vertical's
 #                                                  # courseware (PDC-Scenarios)
-#   PDC_DEMO_DIR=/srv/PDC-Demo ./install-into-pdc-demo.sh
+#   PDC_DEMO_DIR=/srv/PDC-Demo ./install-pdc-demo.sh
 #
 # Verticals: with a PDC-Scenarios checkout in PDC-Demo, the currently
 # selected vertical is detected from its sparse state and refreshed on every
 # run; pass an ID (CSCU/RETAIL/HEALTH/MFG) to select or switch.
 #
 # One-liner on a fresh VM (no checkout of this repo needed):
-#   curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-into-pdc-demo.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/jporeilly/PDC-Policy-Generator/main/install-pdc-demo.sh | bash
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -55,7 +55,7 @@ printf "${B}  Pre-flight${RS}\n"
 command -v git >/dev/null 2>&1 || die "git is not installed."
 ok "git $(git --version | awk '{print $3}')"
 
-[ -d "$DEMO" ] || die "PDC-Demo folder not found: $DEMO   (pass the path: ./install-into-pdc-demo.sh /path/to/PDC-Demo)"
+[ -d "$DEMO" ] || die "PDC-Demo folder not found: $DEMO   (pass the path: ./install-pdc-demo.sh /path/to/PDC-Demo)"
 ok "PDC-Demo folder: $DEMO"
 
 if [ -d "$DEMO/glossary_generator" ]; then

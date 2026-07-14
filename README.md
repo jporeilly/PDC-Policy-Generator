@@ -83,7 +83,7 @@ docs/
   INSTALL.md            install & lab-setup guide (markdown master)
   lab-setup.docx        the same guide in the course design, generated
   tools/                builds docs/lab-setup.docx from INSTALL.md
-install-into-pdc-demo.sh  install/update the app inside the lab VM's
+install-pdc-demo.sh  install/update the app inside the lab VM's
                         ~/PDC-Demo checkout + pull the selected vertical's
                         courseware from PDC-Scenarios (clone or pull + selftest)
 ```
@@ -94,7 +94,7 @@ install-into-pdc-demo.sh  install/update the app inside the lab VM's
 the methods — the app itself stays offline. **No LLM.**
 
 The full guide — including cloning into the lab VM's `~/PDC-Demo` Glossary
-checkout, or the one-script VM install (`install-into-pdc-demo.sh`) — is
+checkout, or the one-script VM install (`install-pdc-demo.sh`) — is
 [docs/INSTALL.md](docs/INSTALL.md) (also as
 [docs/lab-setup.docx](docs/lab-setup.docx)). The short version:
 
@@ -126,7 +126,7 @@ repo, separated per app within each vertical: `courseware/<ID>/Policy/`
 CSCU app workshop ends — at the Registry hand-off — and walks Registry →
 `info` → `author` → PDC import → run Data Identification → verify, with
 checkpoints. `select-vertical.sh <ID>` there pulls just one vertical;
-this repo's `install-into-pdc-demo.sh <ID>` does it for you on the VM.
+this repo's `install-pdc-demo.sh <ID>` does it for you on the VM.
 
 ## Documentation
 

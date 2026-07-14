@@ -29,7 +29,7 @@ single source of truth — the web UI banner and
   separated per app within each vertical (`courseware/<ID>/Policy/` beside
   `Platform/` and `Glossary/`). The repo keeps `docs/tools/` (the Word-guide
   builder) so `docs/lab-setup.docx` still regenerates from `INSTALL.md`.
-- **`install-into-pdc-demo.sh` is vertical-aware**: pass a vertical
+- **`install-pdc-demo.sh` is vertical-aware**: pass a vertical
   (`CSCU`/`RETAIL`/`HEALTH`/`MFG`) and it clones/updates PDC-Scenarios beside
   the app — sparse, `--no-checkout` first so only the selected vertical's
   data kit + courseware ever touch disk — and re-runs detect the selected
@@ -42,7 +42,7 @@ single source of truth — the web UI banner and
 
 ### Changed — the VM install is app-only
 
-- `install-into-pdc-demo.sh` now **sparse-clones** (`--filter=blob:none
+- `install-pdc-demo.sh` now **sparse-clones** (`--filter=blob:none
   --sparse`, checkout set to `policy_generator/`): the lab VM gets the app
   and root files only — courseware and docs never land on the deployment.
   Updates remain plain fast-forward pulls; existing full clones keep working.
@@ -70,7 +70,7 @@ single source of truth — the web UI banner and
 
 ### Added — VM installer script
 
-- **`install-into-pdc-demo.sh`** (repo root): install/update the app inside
+- **`install-pdc-demo.sh`** (repo root): install/update the app inside
   the lab VM's `~/PDC-Demo` Glossary checkout — verifies the folder, clones
   on first run (into `PDC-Policy-Generator/`, excluded from the outer repo's
   `git status`) or fast-forward-pulls thereafter, prints the app version and
