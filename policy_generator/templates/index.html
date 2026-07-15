@@ -327,7 +327,11 @@ you reviewed in the inspector here.</pre></details>
           <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Data Operations → Data Identification Methods → Dictionaries → Import</span></summary>
 <pre>Upload dictionaries-import.zip (the whole zip — one nested zip per
 dictionary inside, each pairing the definition json with its Term-header
-values CSV, the reference list PDC matches similarity-weighted).</pre></details>
+values CSV, the reference list PDC matches similarity-weighted).
+
+Note: PDC's EDIT form doesn't display an imported rule's condition (View →
+Rules shows it, and it evaluates) — don't hand-edit imported methods, or
+you may save an emptied condition. Change them here and re-import.</pre></details>
           <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Run Data Identification on the sources</span></summary>
 <pre>Data Sources → (your database) → run Data Identification
 Object store → Scan Files

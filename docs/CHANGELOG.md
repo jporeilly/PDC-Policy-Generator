@@ -12,6 +12,16 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.5.4] — 2026-07-15
+
+### Changed
+
+- Documented a live-confirmed PDC editor quirk in the import hoodcard (and
+  the CSCU workshop): the edit form does not hydrate an imported rule's
+  JsonLogic condition (View → Rules shows it; it evaluates) — hand-editing
+  an imported method risks saving an emptied condition. The governed change
+  path is adjust-and-re-import (deterministic ids = clean updates).
+
 ## [1.5.3] — 2026-07-15
 
 ### Fixed — rules never fired on demo-scale tables (minSamples)
