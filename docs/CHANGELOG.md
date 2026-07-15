@@ -12,6 +12,17 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.5.3] — 2026-07-15
+
+### Fixed — rules never fired on demo-scale tables (minSamples)
+
+First live Data Identification run: methods imported, term bound, but **no
+tags stamped**. Cause: copying the built-in envelopes verbatim brought
+`minSamples: 200` along — a rule doesn't evaluate until it has 200 sampled
+values, and the lab's tables are tiny (13 members). Now `minSamples: 1`
+(rule + pattern envelope), so methods fire on demo data; stewards can raise
+it in PDC for production volumes.
+
 ## [1.5.2] — 2026-07-15
 
 ### Fixed — pattern import validation ("No Tag found in Rule")
