@@ -587,6 +587,32 @@ $('preview').onclick = async () => {
       sk += `<div class="skgrp ${b.cls}"><div class="skh" title="${esc(b.help)}">${b.label} <span class="msg">(${terms.length})</span> <span class="help" title="${esc(b.help)}">?</span></div>
              <div class="valchips">${terms.map(s => `<span title="${esc(s.why || '')}">${esc(s.term)}</span>`).join('')}</div></div>`;
     }
+    sk += `<details class="hoodcard" style="margin-top:10px"><summary>What these groups mean — and what to do about each</summary>
+      <p class="note" style="margin:10px 0 6px">Identification methods are <b>one of three mechanisms</b> that govern data in PDC —
+      they recognize data <i>by its values</i>, so they only make sense for concepts with a stable value shape.
+      Every term below is already governed; the group says <b>by which mechanism</b>, and only the amber group ever asks for action.</p>
+      <div class="fielddefs">
+        <span class="fdk" style="color:#8a6d1a">&#9679; Should be value-recognizable</span>
+        <span class="fdv">Names that look like canonical shapes or reference lists (routing numbers, addresses, ZIPs, phone numbers).
+          <b>Action:</b> give them a seed on the <i>glossary side</i> — add a <code>curated_seeds</code> entry to the domain pack,
+          or re-scan with <i>Profile data</i> ticked so the format is induced from real values — then re-Generate and they
+          become fully audited custom methods here. This is the seed worklist.</span>
+        <span class="fdk" style="color:var(--blue)">&#9679; Applied by mapping</span>
+        <span class="fdv">Amounts, dates, ids, statuses, names — values with no stable shape (a "Balance Amount" regex would be guesswork).
+          The Glossary app's <b>Apply</b> step already binds the term, its governed tags and sensitivity onto the exact columns the
+          steward mapped (the Registry's <code>sources[]</code>). <b>Action:</b> none — governed by design, no method needed.</span>
+        <span class="fdk" style="color:#6A4AA0">&#9679; Business-rule territory</span>
+        <span class="fdv">Free text and semantic conditions — SSNs hiding in notes, opt-outs being honoured. No value shape can express
+          these; forcing a regex here is the classic free-text blind spot. <b>Action:</b> they are checked by
+          <i>business rules</i> in PDC (Workshop 04), not by identification methods.</span>
+        <span class="fdk" style="color:var(--mute)">&#9679; Table / folder level</span>
+        <span class="fdv">Record-, report- and folder-level concepts. They govern whole tables and document folders through Apply;
+          column-level identification simply doesn't apply at that grain. <b>Action:</b> none.</span>
+      </div>
+      <p class="note" style="margin:8px 0 0">The loop closes with <b>drift-check</b> (roadmap): deployed methods and PDC's live tag
+      facet are compared against the Registry's governed vocabulary, so anything off-vocabulary is flagged instead of drifting silently.
+      The full write-up is in the CSCU workshop's <i>"Why most concepts have no method"</i> section.</p>
+    </details>`;
     html += sk;
   }
   $('manifest').innerHTML = html;

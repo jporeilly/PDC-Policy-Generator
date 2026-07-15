@@ -12,6 +12,18 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.4.6] — 2026-07-14
+
+### Changed
+
+- The skipped-concepts section gained a visible expandable explainer
+  ("What these groups mean — and what to do about each"): a color-keyed
+  legend spelling out each group's mechanism and its action — amber is the
+  seed worklist (curated seed or profiling re-scan), teal/purple/gray need
+  nothing (mapping-applied, business rules, table/folder grain) — plus the
+  three-mechanism framing and the drift-check closing note. Previously this
+  lived only in hover tooltips.
+
 ## [1.4.5] — 2026-07-14
 
 ### Added — diagram pipeline: live mermaid in markdown, rendered PNGs in the docx
