@@ -125,25 +125,29 @@ def api_preview():
         art = author_mod.author(_state["reg"], prefix=prefix)
     except registry_mod.RegistryError as e:
         return jsonify({"error": str(e)}), 400
+    def _hint(r):
+        aliases = (r.get("metadataHints") or {}).get("aliases") or []
+        return aliases[0].get("nameRegex") if aliases else None
+
+    def _tags(r):
+        return [t["name"] for rl in r.get("rules", [])
+                for a in rl.get("actions", []) for t in a.get("applyTags", [])]
+
     def _pat(p):
-        r = p["rule"][0]
+        r = p["rule"]
         return {"name": r["name"], "term": p["term"], "term_id": p.get("term_id") or None,
                 "kind": "pattern",
-                "regex": (r.get("contentRegex") or [{}])[0].get("regex"),
-                "signature": (r.get("contentPatterns") or [{}])[0].get("pattern") if r.get("contentPatterns") else None,
-                "column_hint": (r.get("columnNameRegex") or [{}])[0].get("regex") if r.get("columnNameRegex") else None,
-                "tags": [t["k"] for a in r.get("actions", []) for t in a.get("applyTags", [])],
-                "rule": p["rule"]}
+                "regex": (r.get("regexMatch") or {}).get("regex", [None])[0],
+                "signature": (r.get("profilePatterns") or [None])[0],
+                "column_hint": _hint(r), "tags": _tags(r), "rule": r}
 
     def _dic(d):
-        r = d["rule"][0]
+        r = d["rule"]
         values = [v for v in d["csv"].splitlines()[1:] if v]
         return {"name": r["name"], "term": d["term"], "term_id": d.get("term_id") or None,
                 "kind": "dictionary",
                 "values": values[:200], "values_count": len(values),
-                "column_hint": (r.get("columnNameRegex") or [{}])[0].get("regex") if r.get("columnNameRegex") else None,
-                "tags": [t["k"] for a in r.get("actions", []) for t in a.get("applyTags", [])],
-                "rule": d["rule"]}
+                "column_hint": _hint(r), "tags": _tags(r), "rule": r}
 
     return jsonify({
         "patterns": [_pat(p) for p in art["patterns"]],

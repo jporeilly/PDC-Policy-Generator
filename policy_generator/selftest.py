@@ -79,36 +79,58 @@ def main():
     _c("seedless concept skipped with reason",
        len(art["skipped"]) == 1 and art["skipped"][0]["term"] == "Memo Text")
 
-    p = art["patterns"][0]["rule"][0]
-    _c("patternsRules shape", p["__typename"] == "patternsRules" and p["status"] == "enabled")
-    _c("content regex from the seed", p["contentRegex"][0]["regex"] == r"^CSCU-\d{6}$")
-    _c("signature becomes the content pattern", p["contentPatterns"][0]["pattern"] == "AAAA-nnnnnn")
-    _c("column hint from Registry sources", p["columnNameRegex"][0]["regex"] == "(?i)(mbr_?no)")
-    _c("term assigned", p["assignBusinessTerm"][0]["k"] == "Member Number")
-    tags = [t["k"] for t in p["actions"][0]["applyTags"]]
-    _c("tags governed, structural skipped", tags == ["pii", "sensitive"], tags)
+    p = art["patterns"][0]["rule"]
+    _c("DataPattern envelope (single object, PDC export shape)",
+       isinstance(p, dict) and p["type"] == "DataPattern" and p["isEnabled"] is True and p["builtIn"] is False)
+    _c("content regex from the seed", p["regexMatch"]["regex"] == [r"^CSCU-\d{6}$"])
+    _c("signature becomes profilePatterns", p["profilePatterns"] == ["AAAA-nnnnnn"])
+    _c("column hint becomes metadataHints alias",
+       p["metadataHints"]["aliases"][0]["nameRegex"] == "(?i)(mbr_?no)")
+    prule = p["rules"][0]
+    _c("pattern rule JsonLogic uses regexScore",
+       any("regexScore" in json.dumps(x) for x in prule["confidenceScore"]["+"]))
+    acts = prule["actions"]
+    tags = [t["name"] for a in acts for t in a.get("applyTags", [])]
+    _c("tags governed (live applyTags {'name'} shape), structural skipped",
+       tags == ["pii", "sensitive"], tags)
+    bts = [b for a in acts for b in a.get("assignBusinessTerm", [])]
+    _c("term assigned (name + resolved id)",
+       bts and bts[0]["name"] == "Member Number" and bts[0].get("id") == "t-1", bts)
 
     d = art["dictionaries"][0]
-    _c("dictionariesRules shape", d["rule"][0]["__typename"] == "dictionariesRules")
-    _c("values CSV", d["csv"] == "term\nLOW\nMEDIUM\nHIGH\n")
-    _c("dictionary tags governed", [t["k"] for t in d["rule"][0]["actions"][0]["applyTags"]] == ["compliance", "aml"])
+    _c("Dictionary envelope (csv paired, rowCount)",
+       d["rule"]["type"] == "Dictionary" and d["rule"]["csv"] == d["values_filename"]
+       and d["rule"]["rowCount"] == 3)
+    _c("values CSV has the live 'Term' header", d["csv"] == "Term\nLOW\nMEDIUM\nHIGH\n")
+    _c("dictionary tags governed",
+       [t["name"] for a in d["rule"]["rules"][0]["actions"] for t in a.get("applyTags", [])] == ["compliance", "aml"])
 
     # off-vocabulary tag from a concept never reaches a rule
     reg2 = _registry()
     reg2["concepts"][0]["tags"] = ["pii", "rogue-tag"]
     art2 = A.author(reg2, prefix="X")
-    tags2 = [t["k"] for t in art2["patterns"][0]["rule"][0]["actions"][0]["applyTags"]]
+    tags2 = [t["name"] for a in art2["patterns"][0]["rule"]["rules"][0]["actions"]
+             for t in a.get("applyTags", [])]
     _c("off-vocabulary tag filtered at authoring", "rogue-tag" not in tags2, tags2)
 
     # ---- outputs ----------------------------------------------------------------
     z = zipfile.ZipFile(io.BytesIO(A.to_zip_bytes(art)))
     names = z.namelist()
-    _c("zip layout", "Patterns/cscu_member_number.json" in names
-       and "Dictionaries/cscu_risk_rating.csv" in names and "INDEX.csv" in names, names)
+    _c("download layout: two import zips + manifest",
+       set(names) == {"patterns-import.zip", "dictionaries-import.zip", "INDEX.csv", "README.txt"}, names)
+    pz = zipfile.ZipFile(io.BytesIO(z.read("patterns-import.zip")))
+    _c("patterns zip: flat json per pattern (export layout)",
+       pz.namelist() == ["cscu_member_number.json"], pz.namelist())
+    rule = json.loads(pz.read("cscu_member_number.json"))
+    _c("pattern json is a single object", isinstance(rule, dict) and rule["name"] == "CSCU Member Number")
+    dz = zipfile.ZipFile(io.BytesIO(z.read("dictionaries-import.zip")))
+    _c("dictionaries zip: nested zip per dictionary (export layout)",
+       dz.namelist() == ["cscu_risk_rating.zip"], dz.namelist())
+    iz = zipfile.ZipFile(io.BytesIO(dz.read("cscu_risk_rating.zip")))
+    _c("nested dictionary zip pairs json + csv",
+       set(iz.namelist()) == {"cscu_risk_rating.json", "cscu_risk_rating.csv"}, iz.namelist())
     idx = z.read("INDEX.csv").decode()
     _c("INDEX carries term ids", "t-1" in idx)
-    rule = json.loads(z.read("Patterns/cscu_member_number.json"))
-    _c("zip rule parses back", rule[0]["name"] == "CSCU Member Number")
 
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

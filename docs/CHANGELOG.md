@@ -12,6 +12,36 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.5.0] — 2026-07-15
+
+### Fixed — import format rewritten against live PDC exports (the Gson error)
+
+PDC's import rejected our zip (`Expected BEGIN_OBJECT but was BEGIN_ARRAY`):
+the `patternsRules`/`dictionariesRules` shapes we emitted were the *Rules-tab
+display view*, never the import format. Ground truth was established from a
+live 11.0 instance's own **Export** zips (95 dictionaries + 42 patterns
+scanned) plus the official docs' sample images:
+
+- **Emitters rewritten to the export envelope format**: DataPattern
+  (`regexMatch.regex`, `profilePatterns` from the signature,
+  `metadataHints.aliases` from the physical sources, JsonLogic rule on
+  `regexScore`/`profilePatternScore`/`metadataScore`) and Dictionary
+  (`csv` pairing, `rowCount`, JsonLogic on `similarity`/`metadataScore`).
+  Each JSON file is a **single object**; ids are deterministic UUID5s.
+- **`applyTags` uses the live `{"name": tag}` shape** (the 2020 docs' and
+  TT's `{"k": …}` would have been silently ignored). `assignBusinessTerm`
+  included best-effort as an action (`{name, id}`) — no built-in export
+  demonstrates it; unknown fields are ignored and terms are applied by
+  mapping regardless.
+- **Import layout mirrors the exports**: the download now bundles
+  `patterns-import.zip` (flat json per pattern) and
+  `dictionaries-import.zip` (nested zip per dictionary pairing json +
+  **Term**-header CSV) + INDEX.csv — upload each zip whole on its page
+  (Data Operations → Data Identification Methods).
+- Field-by-field structural diff against the real exports: pattern envelope
+  and rules match exactly; UI (inspector, import instructions, checklist)
+  and selftest (24 checks) updated.
+
 ## [1.4.6] — 2026-07-14
 
 ### Changed

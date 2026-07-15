@@ -190,7 +190,7 @@
       <span class="fsep">›</span>
       <button class="fstep" id="fs3" onclick="scrollTo2()" title="Preview the method manifest, then download the import-ready zip"><span class="fn">3</span> Author</button>
       <span class="fsep">›</span>
-      <button class="fstep" id="fs4" onclick="scrollTo3()" title="In PDC: Management → Data Identification → Patterns / Dictionaries → Import — the zip is shaped for exactly this"><span class="fn">4</span> Import <span class="hint">(PDC)</span></button>
+      <button class="fstep" id="fs4" onclick="scrollTo3()" title="In PDC: Data Operations → Data Identification Methods — upload patterns-import.zip on the Patterns page and dictionaries-import.zip on the Dictionaries page (both in PDC's own export layout)"><span class="fn">4</span> Import <span class="hint">(PDC)</span></button>
       <span class="fsep">›</span>
       <button class="fstep" id="fs5" onclick="scrollTo3()" title="In PDC: run Data Identification on the sources, then check that only governed tags appear"><span class="fn">5</span> Verify <span class="hint">(PDC)</span></button>
     </div>
@@ -261,20 +261,20 @@
           <input type="text" id="prefix" placeholder="default: first word of the glossary name, e.g. CSCU">
         </div>
         <button class="ghost" id="preview" disabled title="See exactly what will be authored — every rule with its business term and binding — without writing anything">Preview</button>
-        <button class="primary" id="download" disabled title="Author the set and download it as one zip: Patterns/, Dictionaries/ (+ values CSVs), INDEX.csv — the exact shapes PDC's Import accepts">Author &amp; download zip</button>
+        <button class="primary" id="download" disabled title="Author the set and download one bundle: patterns-import.zip + dictionaries-import.zip (each in the exact layout PDC's own Export produces) + INDEX.csv manifest">Author &amp; download zip</button>
       </div>
       <div class="chkissue" id="authorNote"></div>
       <div id="manifest"></div>
       <details class="hoodcard" style="margin-top:14px"><summary>Under the hood — how a seed becomes a method</summary>
         <p class="note" style="margin-top:10px">Every emitted file is the exact shape PDC's
-        <b>Management → Data Identification → Import</b> accepts — the same fields the CSCU
-        Technical Track (Module 03) teaches, so a steward can read every rule.</p>
+        <b>Data Operations → Data Identification Methods → Import</b> accepts — the envelope format
+        PDC's own Export produces, verified field-by-field against a live instance (95 dictionaries + 42 patterns).</p>
         <div class="fielddefs">
           <span class="fdk">name</span><span class="fdv">prefixed (e.g. <code>CSCU Member Number</code>) so your methods group together in PDC's method list</span>
           <span class="fdk">column hint</span><span class="fdv">a column-name regex derived from the Registry's physical <code>sources[]</code> — the real columns the steward mapped, not a guess from the term</span>
-          <span class="fdk">contentPatterns</span><span class="fdv">the induced value signature (e.g. <code>^CSCU-\d{6}$</code>), built from profiled sample values at scan time (position signatures, ≥90% share)</span>
+          <span class="fdk">regexMatch / profilePatterns</span><span class="fdv">the induced value regex (e.g. <code>^CSCU-\d{6}$</code>) and its position signature (<code>AAAA-nnnnnn</code>), built from profiled sample values at scan time</span>
           <span class="fdk">dictionary CSV</span><span class="fdv">the reference values profiling actually saw (risk ratings, SAR statuses, account types) — similarity-weighted matching in PDC</span>
-          <span class="fdk">applyTags</span><span class="fdv">the concept's governed tags, <b>re-filtered against the allow-list at authoring time</b> — always lower-case (tags are search facets; case variants would fragment them)</span>
+          <span class="fdk">applyTags</span><span class="fdv">the concept's governed tags as <code>{"name": tag}</code> (the live export shape), <b>re-filtered against the allow-list at authoring time</b> — always lower-case (tags are search facets; case variants would fragment them)</span>
           <span class="fdk">assignBusinessTerm</span><span class="fdv">the governed term — by <code>term_id</code> when resolved, by name until then</span>
           <span class="fdk">INDEX.csv</span><span class="fdv">the review manifest: kind, rule name, file, term, term_id — read it before importing anything</span>
         </div>
@@ -292,9 +292,10 @@ Content-Type: application/json
 {"prefix": "CSCU"}
 
 → 200 application/zip
-   Patterns/&lt;prefix&gt;_&lt;term&gt;.json
-   Dictionaries/&lt;prefix&gt;_&lt;term&gt;_rule.json + &lt;prefix&gt;_&lt;term&gt;.csv
-   INDEX.csv</pre></details>
+   patterns-import.zip        one &lt;prefix&gt;_&lt;term&gt;.json per pattern (flat)
+   dictionaries-import.zip    one nested &lt;prefix&gt;_&lt;term&gt;.zip per dictionary
+                              (json + Term-header csv) — PDC's export layout
+   INDEX.csv + README.txt</pre></details>
           <details class="apicall"><summary><span class="verb cli">CLI</span><span class="u">python -m policy_generator author — identical engine, no server</span><button class="copybtn" onclick="copyCall(event,this)">Copy</button></summary>
 <pre>python -m policy_generator info      # newest auto-discovered Registry
 python -m policy_generator author -o out/ --prefix CSCU</pre></details>
@@ -319,13 +320,14 @@ python -m policy_generator author -o out/ --prefix CSCU</pre></details>
         <code>/jobs/execute/bulk</code> fallback on 404/405).</p>
         <div class="lbl">Manual path (PDC UI)</div>
         <div class="apicalls">
-          <details class="apicall" open><summary><span class="verb ui">UI</span><span class="u">Management → Data Identification → Patterns → Import</span></summary>
-<pre>Import each out/Patterns/*.json
-The rule appears under your prefix; review name, column hint, content pattern,
-Assign-Tags and the business term before saving.</pre></details>
-          <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Management → Data Identification → Dictionaries → Import</span></summary>
-<pre>Import each out/Dictionaries/*_rule.json WITH its values CSV.
-The CSV is the reference list PDC matches against (similarity-weighted).</pre></details>
+          <details class="apicall" open><summary><span class="verb ui">UI</span><span class="u">Data Operations → Data Identification Methods → Patterns → Import</span></summary>
+<pre>Upload patterns-import.zip (the whole zip — one json per pattern inside).
+The methods appear under your prefix; View → Rules shows exactly the JSON
+you reviewed in the inspector here.</pre></details>
+          <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Data Operations → Data Identification Methods → Dictionaries → Import</span></summary>
+<pre>Upload dictionaries-import.zip (the whole zip — one nested zip per
+dictionary inside, each pairing the definition json with its Term-header
+values CSV, the reference list PDC matches similarity-weighted).</pre></details>
           <details class="apicall"><summary><span class="verb ui">UI</span><span class="u">Run Data Identification on the sources</span></summary>
 <pre>Data Sources → (your database) → run Data Identification
 Object store → Scan Files
@@ -745,7 +747,7 @@ $('download').onclick = async () => {
   const name = (r.headers.get('Content-Disposition') || '').match(/filename="?([^";]+)/)?.[1] || 'methods.zip';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
-  note($('authorNote'), 'ok', `Downloaded ${name} — next: unzip, then in PDC Management → Data Identification import the Patterns and the Dictionaries (each rule with its values CSV). Step 4 on the workflow bar — the checklist in card 3 tracks it.`);
+  note($('authorNote'), 'ok', `Downloaded ${name} — unzip once: upload patterns-import.zip on PDC's Patterns page and dictionaries-import.zip on the Dictionaries page (Data Operations → Data Identification Methods → Import). Step 4 on the workflow bar — the checklist in card 3 tracks it.`);
   authored = true; renderFlow(); renderChecklist();
   $('cardImport').scrollIntoView({behavior:'smooth'});
 };
@@ -753,8 +755,8 @@ $('download').onclick = async () => {
 /* ---------- import checklist (suggestion: bridge the manual PDC steps) ---------- */
 const CK_ITEMS = [
   {t:'Unzip and read INDEX.csv', h:'The review manifest — one row per method with its term and binding. Read before importing.', g:'import'},
-  {t:'Patterns imported', h:'Management → Data Identification → Patterns → Import — each out/Patterns/*.json', g:'import'},
-  {t:'Dictionaries imported (each with its values CSV)', h:'Management → Data Identification → Dictionaries → Import — the *_rule.json WITH its CSV', g:'import'},
+  {t:'patterns-import.zip imported', h:'Data Operations → Data Identification Methods → Patterns → Import — upload the whole zip', g:'import'},
+  {t:'dictionaries-import.zip imported', h:'Data Operations → Data Identification Methods → Dictionaries → Import — upload the whole zip (nested zips pair each json with its CSV)', g:'import'},
   {t:'Data Identification ran on the database source', h:'Data Sources → your database → run Data Identification', g:'verify'},
   {t:'Scan Files ran on the object store', h:'PDC’s internal start-job rejects public tokens — use the UI’s Scan Files button', g:'verify'},
   {t:'Only governed tags in the facet', h:'Search by tag: the governed facets match, and no stray facet appeared — the no-drift check', g:'verify'},
