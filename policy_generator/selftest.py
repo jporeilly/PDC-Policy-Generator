@@ -91,7 +91,7 @@ def main():
        any("regexScore" in json.dumps(x) for x in prule["confidenceScore"]["+"]))
     acts = prule["actions"]
     _c("ONE action object (PDC validator: every action needs a tag)",
-       len(acts) == 1 and acts[0].get("applyTags"), acts)
+       len(acts) == 1 and bool(acts[0].get("applyTags")), acts)
     tags = [t["name"] for t in acts[0]["applyTags"]]
     _c("tags governed (live applyTags {'name'} shape), structural skipped",
        tags == ["pii", "sensitive"], tags)
