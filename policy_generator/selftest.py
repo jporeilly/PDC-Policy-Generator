@@ -6,7 +6,7 @@ selftest.py — offline checks for the author pipeline (no PDC, no network).
 from __future__ import annotations
 import io, json, sys, zipfile
 
-from . import author as A, registry as R
+from . import author as A, pdc as P, registry as R
 
 PASS = FAIL = 0
 
@@ -122,6 +122,46 @@ def main():
     _c("all-tags-filtered concept is skipped (import validator needs a tag)",
        not art3["patterns"] and any("governed tags" in x["why"] for x in art3["skipped"]),
        art3["skipped"])
+
+    # ---- retire (GraphQL method lifecycle, transport stubbed) -----------------
+    calls = []
+
+    def fake_req(method, url, token=None, body=None, **kw):
+        calls.append((url, body))
+        q = (body or {}).get("query", "")
+        if "DictionariesMany" in q and "mutation" not in q:
+            return {"data": {
+                "DictionariesMany": [
+                    {"_id": "d1", "name": "CSCU Risk Rating", "builtIn": False},
+                    {"_id": "d2", "name": "Email Address", "builtIn": True}],
+                "DataPatternsMany": [
+                    {"_id": "p1", "name": "CSCU Member Number", "builtIn": False}]}}
+        if "DictionariesRemoveById" in q:
+            return {"data": {"DictionariesRemoveById": {"recordId": "d1"}}}
+        if "DataPatternsRemoveById" in q:
+            return {"data": {"DataPatternsRemoveById": {"recordId": "p1"}}}
+        return {"data": {}}
+
+    orig_req = P._req
+    P._req = fake_req
+    try:
+        rows = P.list_methods("https://pentaho.io", "tok", prefix="CSCU")
+        _c("list_methods scopes by prefix (built-in Email excluded by name)",
+           {r["name"] for r in rows} == {"CSCU Risk Rating", "CSCU Member Number"}, rows)
+        _c("graphql posts to <base>/graphql",
+           calls and calls[-1][0] == "https://pentaho.io/graphql", calls and calls[-1][0])
+        rid = P.remove_method("https://pentaho.io", "tok", "DataPattern", "p1")
+        _c("remove_method DataPattern uses DataPatternsRemoveById -> recordId",
+           rid == "p1" and "DataPatternsRemoveById" in calls[-1][1]["query"], calls[-1][1]["query"])
+        rid2 = P.remove_method("https://pentaho.io", "tok", "Dictionary", "d1")
+        _c("remove_method Dictionary uses DictionariesRemoveById -> recordId", rid2 == "d1")
+        try:
+            P.remove_method("https://pentaho.io", "tok", "Nope", "x")
+            _c("remove_method rejects unknown kind", False)
+        except ValueError:
+            _c("remove_method rejects unknown kind", True)
+    finally:
+        P._req = orig_req
 
     # ---- outputs ----------------------------------------------------------------
     z = zipfile.ZipFile(io.BytesIO(A.to_zip_bytes(art)))

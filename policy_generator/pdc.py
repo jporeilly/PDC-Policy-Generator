@@ -135,6 +135,72 @@ def decode_jwt(token):
 
 
 # --------------------------------------------------------------------------- #
+#  GraphQL — Data Identification method lifecycle (list + retire)
+#
+#  PDC's Data Identification UI is backed by a graphql-compose-mongoose
+#  Apollo endpoint at <base>/graphql, NOT the public REST API. Introspection
+#  is disabled in production, but the generated CRUD field names are the
+#  Mongoose convention and were confirmed live against PDC 11.0.0:
+#    query    DictionariesMany / DataPatternsMany   -> [{_id, name, builtIn}]
+#    mutation DictionariesRemoveById(_id) {recordId}
+#             DataPatternsRemoveById(_id) {recordId}
+#  The same Keycloak bearer token that drives the REST API authenticates it.
+# --------------------------------------------------------------------------- #
+_METHOD_KINDS = {
+    "Dictionary": {"many": "DictionariesMany", "remove": "DictionariesRemoveById"},
+    "DataPattern": {"many": "DataPatternsMany", "remove": "DataPatternsRemoveById"},
+}
+
+
+def graphql(base_url, token, query, variables=None, verify_tls=True, timeout=30):
+    """POST a GraphQL operation to <base>/graphql. Returns the `data` object;
+       raises TokenExpired on 401, RuntimeError carrying any GraphQL errors."""
+    url = clean_base(base_url) + "/graphql"
+    body = {"query": query}
+    if variables is not None:
+        body["variables"] = variables
+    out = _req("POST", url, token=token, body=body, verify_tls=verify_tls, timeout=timeout)
+    if out.get("errors"):
+        msg = "; ".join(str((e or {}).get("message", e)) for e in out["errors"])[:600]
+        raise RuntimeError(f"GraphQL error: {msg}")
+    return out.get("data") or {}
+
+
+def list_methods(base_url, token, prefix=None, verify_tls=True, timeout=30):
+    """List Data Identification methods (dictionaries + patterns). When
+       `prefix` is given, only methods whose name starts with it are returned —
+       the guard that keeps a retire scoped to the app's own authored set.
+       Each row: {kind, _id, name, builtIn}."""
+    data = graphql(
+        base_url, token,
+        "{ DictionariesMany { _id name builtIn } DataPatternsMany { _id name builtIn } }",
+        verify_tls=verify_tls, timeout=timeout)
+    rows = []
+    for kind, fld in (("Dictionary", "DictionariesMany"), ("DataPattern", "DataPatternsMany")):
+        for m in (data.get(fld) or []):
+            name = m.get("name") or ""
+            if prefix and not name.startswith(prefix):
+                continue
+            rows.append({"kind": kind, "_id": m.get("_id"), "name": name,
+                         "builtIn": bool(m.get("builtIn"))})
+    return rows
+
+
+def remove_method(base_url, token, kind, _id, verify_tls=True, timeout=30):
+    """Delete one method by _id. `kind` is 'Dictionary' or 'DataPattern'.
+       Returns the removed recordId (truthy on success)."""
+    spec = _METHOD_KINDS.get(kind)
+    if not spec:
+        raise ValueError(f"unknown method kind: {kind!r}")
+    data = graphql(
+        base_url, token,
+        f"mutation($id: String!) {{ {spec['remove']}(_id: $id) {{ recordId }} }}",
+        variables={"id": _id}, verify_tls=verify_tls, timeout=timeout)
+    payload = data.get(spec["remove"]) or {}
+    return payload.get("recordId")
+
+
+# --------------------------------------------------------------------------- #
 #  Term resolution (verbatim logic from the Glossary app)
 # --------------------------------------------------------------------------- #
 def _results(out):

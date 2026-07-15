@@ -12,6 +12,35 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.6.0] — 2026-07-15
+
+### Added
+
+- **Retire imported set** on the Reconcile page — deletes the app's authored
+  Data Identification methods (dictionaries *and* patterns) over PDC's GraphQL
+  endpoint, filling a real product gap: **PDC 11.0's method list has no Delete**
+  (only View/Edit). Scoped to a name prefix so it can only ever touch your set;
+  built-ins are refused outright even if one carries the prefix. **Preview
+  matches** lists first (read-only); **Retire set** deletes after a
+  confirmation, with a per-method result table.
+- PDC client (`pdc.py`): `graphql()`, `list_methods(prefix=…)`, and
+  `remove_method(kind, _id)`. Data Identification is backed by a
+  graphql-compose-mongoose Apollo endpoint at `{pdc}/graphql`, authenticated by
+  the same Keycloak bearer token as the REST API. Field names
+  (`DictionariesMany`/`DataPatternsMany`, `DictionariesRemoveById`/
+  `DataPatternsRemoveById`) were **confirmed live against PDC 11.0.0** by
+  discovery through Apollo's validation-error suggestions (introspection is
+  disabled in production), then exercised end-to-end deleting the CSCU set.
+- Endpoints `POST /api/pdc/methods` (scoped list) and `POST /api/pdc/retire`
+  (scoped delete, built-ins refused, optional `ids` allow-list). Selftest grows
+  to 31 checks (transport-stubbed coverage of list/remove/kind-guard).
+
+### Note
+
+- Deterministic UUID5 ids make a re-import an **upsert**, so a clean re-run
+  rarely needs retire — reach for it when a term leaves the glossary and its
+  orphaned method would otherwise linger.
+
 ## [1.5.4] — 2026-07-15
 
 ### Changed

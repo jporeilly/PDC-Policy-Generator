@@ -61,8 +61,9 @@
   button{cursor:pointer;border:0;border-radius:7px;padding:8px 14px;font-size:13.5px;font-weight:600;font-family:inherit}
   button.sm{padding:5px 10px;font-size:12px}
   .primary{background:var(--teal);color:#fff} .primary:hover{filter:brightness(.94)}
-  .primary:disabled,.ghost:disabled{opacity:.45;cursor:default}
+  .primary:disabled,.ghost:disabled,.danger:disabled{opacity:.45;cursor:default}
   .ghost{background:var(--card);color:var(--blue);border:1px solid var(--line)} .ghost:hover{filter:brightness(.97)}
+  .danger{background:#F3E3E5;color:#9A3340;border:1px solid #E4C4C8} .danger:hover{filter:brightness(.97)}
   .note{font-size:12.5px;color:var(--mute);line-height:1.5}
   .note code{background:var(--card);padding:1px 5px;border-radius:4px;font-family:Consolas,monospace}
   .msg{font-size:12.5px;color:var(--mute)}
@@ -433,6 +434,43 @@ scoped to the entities the Registry's sources[] name).</pre></details>
         </div>
       </details>
     </div>
+
+    <div class="card">
+      <h3><span class="sn-inline">3</span> Retire the imported set
+        <span class="help" title="PDC 11.0's UI has no Delete for identification methods. This deletes your authored methods over the GraphQL endpoint the UI itself uses — scoped to a name prefix, built-ins refused.">?</span></h3>
+      <p class="note" style="margin-top:0">
+        PDC 11.0's method list offers only <b>View</b> and <b>Edit</b> — no Delete. This removes
+        your authored methods (dictionaries <i>and</i> patterns) over the same <code>/graphql</code>
+        endpoint the UI uses, <b>scoped to a name prefix</b> so it can only ever touch your set.
+        Built-ins are refused even if one carries the prefix. Deterministic ids mean a re-import
+        is an upsert, so a clean re-run rarely needs this — reach for it when a term left the
+        glossary and its orphaned method would otherwise linger.
+      </p>
+      <div class="row">
+        <label>Name prefix <span class="help" title="Only methods whose name starts with this are touched. Defaults to your author prefix.">?</span></label>
+        <input type="text" id="retPrefix" placeholder="e.g. CSCU" style="max-width:160px">
+        <button class="ghost" id="retList" disabled title="Preview the methods this prefix matches — read-only, nothing is deleted">Preview matches</button>
+        <button class="danger" id="retRun" disabled title="Delete every previewed method — cannot be undone (re-import from the Author page to restore)">Retire set</button>
+      </div>
+      <div class="chkissue" id="retNote"></div>
+      <div id="retTable"></div>
+      <details class="hoodcard" style="margin-top:14px"><summary>Under the hood — the GraphQL calls (live)</summary>
+        <p class="note" style="margin-top:10px">Data Identification is backed by a graphql-compose-mongoose Apollo
+        endpoint at <code>{pdc}/graphql</code>, authenticated by the same bearer token as the REST API.
+        Introspection is disabled in production, but the generated CRUD field names are confirmed
+        against PDC 11.0.0.</p>
+        <div class="apicalls">
+          <details class="apicall" open><summary><span class="verb post">POST</span><span class="u">{pdc}/graphql — list the custom set (read-only)</span></summary>
+<pre>Authorization: Bearer ********
+{ DictionariesMany { _id name builtIn } DataPatternsMany { _id name builtIn } }
+→ filtered client-side to names starting with your prefix</pre></details>
+          <details class="apicall"><summary><span class="verb post">POST</span><span class="u">{pdc}/graphql — delete one method by _id</span></summary>
+<pre>Authorization: Bearer ********
+mutation($id: String!) { DictionariesRemoveById(_id: $id) { recordId } }
+mutation($id: String!) { DataPatternsRemoveById(_id: $id) { recordId } }</pre></details>
+        </div>
+      </details>
+    </div>
   </div>
 
   <!-- ================= SETTINGS ================= -->
@@ -456,7 +494,7 @@ scoped to the entities the Registry's sources[] name).</pre></details>
         <span class="fdk">Companion</span><span class="fdv">the Glossary Generator (port 5000) writes the Registry this app consumes</span>
         <span class="fdk">Roadmap</span><span class="fdv">reconcile → deploy → drift-check, in that order</span>
         <span class="fdk">CLI</span><span class="fdv"><code>python -m policy_generator info|author</code> — the same engine, zero dependencies</span>
-        <span class="fdk">Selftest</span><span class="fdv"><code>python -m policy_generator.selftest</code> — 20 offline checks, no PDC, no network</span>
+        <span class="fdk">Selftest</span><span class="fdv"><code>python -m policy_generator.selftest</code> — 31 offline checks, no PDC, no network</span>
       </div>
     </div>
   </div>
@@ -788,7 +826,10 @@ function ckToggle(i, on) { ckState[i] = on; try { localStorage.setItem(ckKey(), 
 
 /* ---------- reconcile ---------- */
 let pdcConnected = false;
-function recButtons(){ $('recRun').disabled = !(loaded && pdcConnected); }
+function recButtons(){
+  $('recRun').disabled = !(loaded && pdcConnected);
+  $('retList').disabled = $('retRun').disabled = !pdcConnected;
+}
 $('pdcConnect').onclick = async () => {
   clearNote($('pdcNote'));
   $('pdcConnect').disabled = true; $('pdcConnect').textContent = 'Connecting…';
@@ -862,6 +903,58 @@ $('recApply').onclick = async () => {
     + `Export keeps a copy of the reconciled Registry.`);
   $('sResolved').textContent = j.resolved_term_ids;
   $('recApply').disabled = true;
+};
+
+/* ---------- retire imported set ---------- */
+function retPrefixVal(){ return ($('retPrefix').value || $('prefix').value || '').trim(); }
+const retRowHtml = m => `<tr><td><span class="badge ${m.kind === 'Dictionary' ? 'resolved' : 'verified'}">${m.kind}</span></td>
+    <td>${esc(m.name)}${m.builtIn ? ' <span class="msg" title="Built-in — never deleted">built-in</span>' : ''}</td>
+    <td><code>${esc(m._id)}</code></td>
+    <td id="ret_${esc(m._id)}">${m.removed === undefined ? '' : (m.removed ? '<span class="badge verified">removed</span>' : '<span class="badge missing">'+esc(m.error||'failed')+'</span>')}</td></tr>`;
+function retTable(rows){
+  $('retTable').innerHTML = rows.length
+    ? `<table class="rtbl"><tr><th>Kind</th><th>Method name</th><th>_id</th><th>Result</th></tr><tbody>${rows.map(retRowHtml).join('')}</tbody></table>`
+    : '';
+}
+$('retList').onclick = async () => {
+  clearNote($('retNote'));
+  const prefix = retPrefixVal();
+  if (!prefix) { note($('retNote'), 'warn', 'Enter a name prefix first (e.g. CSCU) — retire is always scoped.'); return; }
+  $('retList').disabled = true; $('retList').textContent = 'Listing…';
+  try {
+    const r = await fetch('/api/pdc/methods', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({prefix})});
+    const j = await r.json();
+    if (!r.ok) { note($('retNote'), 'bad', j.error || 'list failed'); if (r.status===401) { pdcConnected=false; recButtons(); } }
+    else {
+      retTable(j.methods);
+      note($('retNote'), j.count ? 'ok' : 'warn',
+        j.count ? `${j.count} method(s) match “${prefix}” — review, then Retire set to delete them.`
+                : `No methods start with “${prefix}”. Nothing to retire.`);
+    }
+  } catch(e) { note($('retNote'), 'bad', 'list failed: ' + e); }
+  $('retList').disabled = false; $('retList').textContent = 'Preview matches'; recButtons();
+};
+$('retRun').onclick = async () => {
+  clearNote($('retNote'));
+  const prefix = retPrefixVal();
+  if (!prefix) { note($('retNote'), 'warn', 'Enter a name prefix first (e.g. CSCU) — retire is always scoped.'); return; }
+  if (!confirm(`Delete every non-built-in method whose name starts with “${prefix}”? This cannot be undone (re-import from the Author page to restore).`)) return;
+  $('retRun').disabled = true; $('retRun').textContent = 'Retiring…';
+  try {
+    const r = await fetch('/api/pdc/retire', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({prefix})});
+    const j = await r.json();
+    if (!r.ok) { note($('retNote'), 'bad', j.error || 'retire failed'); if (r.status===401) { pdcConnected=false; recButtons(); } }
+    else {
+      retTable(j.results);
+      const failed = j.attempted - j.removed;
+      note($('retNote'), failed ? 'warn' : 'ok',
+        `${j.removed} of ${j.attempted} method(s) removed${failed ? ` — ${failed} failed (see the table)` : ''}.`
+        + ' Deterministic ids mean a re-import from the Author page recreates them cleanly.');
+    }
+  } catch(e) { note($('retNote'), 'bad', 'retire failed: ' + e); }
+  $('retRun').disabled = false; $('retRun').textContent = 'Retire set'; recButtons();
 };
 </script>
 </body>

@@ -204,6 +204,71 @@ def api_pdc_connect():
                     "expires_in": who.get("expires_in")})
 
 
+@app.post("/api/pdc/methods")
+def api_pdc_methods():
+    """List the custom Data Identification methods in PDC, scoped to a name
+    prefix (the app's authored set). Read-only — the preview before a retire."""
+    if not _state["pdc"]:
+        return jsonify({"error": "connect to PDC first"}), 400
+    p = _state["pdc"]
+    b = request.get_json(silent=True) or {}
+    prefix = (b.get("prefix") or "").strip() or None
+    try:
+        rows = pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
+                                    verify_tls=p["verify_tls"])
+    except pdc_mod.TokenExpired:
+        _state["pdc"] = None
+        return jsonify({"error": "PDC session expired — connect again"}), 401
+    except Exception as e:
+        return jsonify({"error": f"method list failed: {e}"}), 502
+    return jsonify({"methods": rows, "count": len(rows), "prefix": prefix})
+
+
+@app.post("/api/pdc/retire")
+def api_pdc_retire():
+    """Delete Data Identification methods by _id via GraphQL. Built-ins are
+    refused outright; a prefix scope is required so this can never sweep the
+    whole catalog. Returns a per-method result list."""
+    if not _state["pdc"]:
+        return jsonify({"error": "connect to PDC first"}), 400
+    p = _state["pdc"]
+    b = request.get_json(silent=True) or {}
+    prefix = (b.get("prefix") or "").strip()
+    if not prefix:
+        return jsonify({"error": "a name prefix is required — retire is always scoped"}), 400
+    try:
+        rows = pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
+                                    verify_tls=p["verify_tls"])
+    except pdc_mod.TokenExpired:
+        _state["pdc"] = None
+        return jsonify({"error": "PDC session expired — connect again"}), 401
+    except Exception as e:
+        return jsonify({"error": f"method list failed: {e}"}), 502
+
+    # An explicit id allow-list from the client is honoured (a subset of the
+    # scoped set); absent it, the whole prefixed set is targeted.
+    want = set(b.get("ids") or [])
+    results = []
+    for m in rows:
+        if m.get("builtIn"):
+            continue  # never delete a built-in, even if one carries the prefix
+        if want and m["_id"] not in want:
+            continue
+        try:
+            rid = pdc_mod.remove_method(p["base"], p["token"], m["kind"], m["_id"],
+                                        verify_tls=p["verify_tls"])
+            results.append({**m, "removed": bool(rid), "recordId": rid})
+        except pdc_mod.TokenExpired:
+            _state["pdc"] = None
+            return jsonify({"error": "PDC session expired mid-retire — connect again",
+                            "results": results}), 401
+        except Exception as e:
+            results.append({**m, "removed": False, "error": str(e)[:300]})
+    removed = sum(1 for r in results if r.get("removed"))
+    return jsonify({"results": results, "removed": removed,
+                    "attempted": len(results), "prefix": prefix})
+
+
 def _reconcile_rows(concepts, found):
     rows = []
     for c in concepts:
