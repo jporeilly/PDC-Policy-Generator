@@ -12,6 +12,14 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.5.1] — 2026-07-15
+
+### Changed
+
+- The "What these groups mean — and what to do about each" explainer now
+  sits **above** the color-coded skipped groups (read the legend first,
+  then the lists), still collapsed by default.
+
 ## [1.5.0] — 2026-07-15
 
 ### Fixed — import format rewritten against live PDC exports (the Gson error)

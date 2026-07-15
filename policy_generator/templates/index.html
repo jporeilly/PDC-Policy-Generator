@@ -583,13 +583,7 @@ $('preview').onclick = async () => {
     let sk = `<div class="skipbox"><b>${j.skipped.length} concept(s) have no detection seed</b> — usually correct:
       identification only <i>recognizes data by its values</i>. Every one of these is still governed; the color says by which mechanism
       <span class="help" title="Identification methods (this app) recognize values; the Glossary app's Apply step binds terms to their mapped columns; business rules check semantics. Drift-check (roadmap) closes the loop.">?</span></div>`;
-    for (const b of BUCKETS) {
-      const terms = j.skipped.filter(s => s.bucket === b.k);
-      if (!terms.length) continue;
-      sk += `<div class="skgrp ${b.cls}"><div class="skh" title="${esc(b.help)}">${b.label} <span class="msg">(${terms.length})</span> <span class="help" title="${esc(b.help)}">?</span></div>
-             <div class="valchips">${terms.map(s => `<span title="${esc(s.why || '')}">${esc(s.term)}</span>`).join('')}</div></div>`;
-    }
-    sk += `<details class="hoodcard" style="margin-top:10px"><summary>What these groups mean — and what to do about each</summary>
+    sk += `<details class="hoodcard" style="margin:10px 0"><summary>What these groups mean — and what to do about each</summary>
       <p class="note" style="margin:10px 0 6px">Identification methods are <b>one of three mechanisms</b> that govern data in PDC —
       they recognize data <i>by its values</i>, so they only make sense for concepts with a stable value shape.
       Every term below is already governed; the group says <b>by which mechanism</b>, and only the amber group ever asks for action.</p>
@@ -615,6 +609,12 @@ $('preview').onclick = async () => {
       facet are compared against the Registry's governed vocabulary, so anything off-vocabulary is flagged instead of drifting silently.
       The full write-up is in the CSCU workshop's <i>"Why most concepts have no method"</i> section.</p>
     </details>`;
+    for (const b of BUCKETS) {
+      const terms = j.skipped.filter(s => s.bucket === b.k);
+      if (!terms.length) continue;
+      sk += `<div class="skgrp ${b.cls}"><div class="skh" title="${esc(b.help)}">${b.label} <span class="msg">(${terms.length})</span> <span class="help" title="${esc(b.help)}">?</span></div>
+             <div class="valchips">${terms.map(s => `<span title="${esc(s.why || '')}">${esc(s.term)}</span>`).join('')}</div></div>`;
+    }
     html += sk;
   }
   $('manifest').innerHTML = html;
