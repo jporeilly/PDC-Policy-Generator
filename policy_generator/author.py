@@ -66,18 +66,17 @@ def _rule_tags(concept, allow):
 
 
 def _actions(tags, term, term_id):
-    """applyTags in the live export shape ({'name': tag}); assignBusinessTerm
-    is best-effort (no built-in export demonstrates it; unknown JSON fields
-    are ignored by PDC's importer, and terms are applied by mapping anyway)."""
-    acts = []
-    if tags:
-        acts.append({"applyTags": [{"name": t} for t in tags]})
+    """ONE action object carrying applyTags (live export shape, {'name': tag})
+    plus a best-effort assignBusinessTerm. PDC's import validator walks every
+    action object and requires a tag in each ('No Tag found in Rule'), so the
+    term binding must ride in the SAME object as the tags — never its own."""
+    act = {"applyTags": [{"name": t} for t in tags]}
     if term:
         bt = {"name": term}
         if term_id:
             bt["id"] = term_id
-        acts.append({"assignBusinessTerm": [bt]})
-    return acts
+        act["assignBusinessTerm"] = [bt]
+    return [act]
 
 
 def _pattern_def(name, description, category, col_rx, signature, content_rx,
@@ -182,6 +181,13 @@ def author(reg: dict, prefix: str = None) -> dict:
             continue
         col_rx = column_name_regex(c.get("sources"))
         tags = _rule_tags(c, allow)
+        if not tags:
+            # PDC's import validator rejects a rule with no tag — and a method
+            # that stamps nothing governs nothing. Fix the tags glossary-side.
+            skipped.append({"term": term,
+                            "why": "no governed tags survive the allow-list filter "
+                                   "(a method must stamp at least one governed tag)"})
+            continue
         name = f"{prefix} {term}"
         category = f"{_slug(prefix).upper()}_{_slug(c.get('category') or 'General').title().replace('_', '')}"
         desc = " ".join(str(c.get("definition") or "").split())[:200] or f"Authored from the {reg.get('glossary')} Registry"

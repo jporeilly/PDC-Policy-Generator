@@ -90,11 +90,13 @@ def main():
     _c("pattern rule JsonLogic uses regexScore",
        any("regexScore" in json.dumps(x) for x in prule["confidenceScore"]["+"]))
     acts = prule["actions"]
-    tags = [t["name"] for a in acts for t in a.get("applyTags", [])]
+    _c("ONE action object (PDC validator: every action needs a tag)",
+       len(acts) == 1 and acts[0].get("applyTags"), acts)
+    tags = [t["name"] for t in acts[0]["applyTags"]]
     _c("tags governed (live applyTags {'name'} shape), structural skipped",
        tags == ["pii", "sensitive"], tags)
-    bts = [b for a in acts for b in a.get("assignBusinessTerm", [])]
-    _c("term assigned (name + resolved id)",
+    bts = acts[0].get("assignBusinessTerm") or []
+    _c("term binding rides in the SAME action as the tags",
        bts and bts[0]["name"] == "Member Number" and bts[0].get("id") == "t-1", bts)
 
     d = art["dictionaries"][0]
@@ -112,6 +114,14 @@ def main():
     tags2 = [t["name"] for a in art2["patterns"][0]["rule"]["rules"][0]["actions"]
              for t in a.get("applyTags", [])]
     _c("off-vocabulary tag filtered at authoring", "rogue-tag" not in tags2, tags2)
+
+    # a concept whose tags ALL fall to the filter cannot become a method
+    reg3 = _registry()
+    reg3["concepts"][0]["tags"] = ["rogue-only"]
+    art3 = A.author(reg3, prefix="X")
+    _c("all-tags-filtered concept is skipped (import validator needs a tag)",
+       not art3["patterns"] and any("governed tags" in x["why"] for x in art3["skipped"]),
+       art3["skipped"])
 
     # ---- outputs ----------------------------------------------------------------
     z = zipfile.ZipFile(io.BytesIO(A.to_zip_bytes(art)))

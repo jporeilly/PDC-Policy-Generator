@@ -12,6 +12,23 @@ single source of truth — the web UI banner and
 > Classification Registry, with the CLI, the local web UI, and the CSCU
 > courseware set.
 
+## [1.5.2] — 2026-07-15
+
+### Fixed — pattern import validation ("No Tag found in Rule")
+
+PDC's import validator walks **every** action object and requires a tag in
+each; our separate `{assignBusinessTerm}` action object had none, so
+`PatternImporter.validateJsonForNewPattern` rejected the file (live worker
+log from the lab). Two changes:
+
+- **One action object per rule**: `applyTags` and `assignBusinessTerm` now
+  ride in the same object, matching how built-ins structure actions.
+- **A concept whose tags all fall to the allow-list filter is skipped**
+  (with the reason) instead of authored — an untaggable method can neither
+  pass validation nor govern anything; fix its tags glossary-side.
+
+Selftest 26 checks.
+
 ## [1.5.1] — 2026-07-15
 
 ### Changed
