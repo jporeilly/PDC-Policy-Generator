@@ -20,7 +20,7 @@ calls in the author stage. All it needs is Python and a Registry file.
 - The web UI running at `http://127.0.0.1:5001` (the Glossary Generator keeps
   port 5000 — both run side by side).
 - The CLI (`python -m policy_generator`) working with zero dependencies.
-- The offline selftest passing (20 checks, no PDC, no network).
+- The offline selftest passing (31 checks, no PDC, no network).
 - A Registry loaded and a method set authored, ready for
   **Management → Data Identification → Import** in PDC.
 
@@ -237,11 +237,19 @@ python -m policy_generator author path/to/registry.<uuid>.json -o out/ --prefix 
 ## Part D — Verify the install
 
 ```sh
+# from the PDC-Demo folder (the one that CONTAINS policy_generator/),
+# module path with a dot — not a filename:
 python -m policy_generator.selftest
 ```
 
-**Success looks like this:** `20 passed, 0 failed` — the selftest builds a
+**Success looks like this:** `31 passed, 0 failed` — the selftest builds a
 fixture Registry in memory and exercises the whole author pipeline offline.
+
+> Common miss: running `python -m selftest.py` from *inside*
+> `policy_generator/` fails with *"attempted relative import with no known
+> parent package"* — `-m` takes a package.module path and must run from the
+> parent folder. If the count reads lower than 31, your clone is behind —
+> re-run `./install-pdc-demo.sh` (it fast-forward-pulls).
 
 Then load a real Registry in the UI (drag-drop, or paste its path) and check
 the contract summary: concepts, seeds, resolved term ids, governed tags. The
