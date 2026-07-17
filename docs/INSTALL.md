@@ -226,6 +226,56 @@ bind all interfaces on a lab VM, `HOST`/`PORT` environment variables.
 
 Open `http://127.0.0.1:5001` and confirm the banner shows the app version.
 
+### Windows 11 host — first run, step by step
+
+Everything below runs in a normal PowerShell window (no admin needed).
+
+1. **Prerequisites** (once per machine):
+
+   ```powershell
+   winget install Python.Python.3.12     # or 3.13 from python.org — tick "Add to PATH"
+   winget install OpenJS.NodeJS.LTS      # Node 18+ (builds the React UI)
+   winget install Git.Git                # if git isn't installed yet
+   ```
+
+   Close and reopen PowerShell afterwards so PATH updates take effect.
+
+2. **Clone and build the UI** (once per checkout):
+
+   ```powershell
+   git clone https://github.com/jporeilly/PDC-Policy-Generator.git
+   cd PDC-Policy-Generator\frontend
+   npm install
+   npm run build                         # produces frontend\dist — the UI the API serves
+   ```
+
+3. **Launch**:
+
+   ```powershell
+   cd ..\policy_generator
+   .\run.ps1                             # or double-click run.bat
+   ```
+
+   First run builds a local `.venv` and installs the dependencies (~1 minute);
+   repeat runs skip that and start immediately. If scripts are blocked:
+   `powershell -ExecutionPolicy Bypass -File .\run.ps1`.
+
+4. **Verify**: open `http://127.0.0.1:5001` — the banner shows the version.
+   The interactive API docs live at `http://127.0.0.1:5001/docs`.
+
+### Updating an existing checkout (Windows 11)
+
+```powershell
+cd PDC-Policy-Generator
+git pull                                 # same repo everywhere — root is conventional
+cd frontend; npm install; npm run build  # ONLY needed when frontend/ changed
+cd ..\policy_generator; .\run.ps1        # python deps reinstall automatically when
+                                         # requirements.txt changed (launcher hashes it)
+```
+
+If you skip the UI rebuild after a pull that touched `frontend/`, the app still
+runs but serves the previous UI bundle — the launcher can't detect that.
+
 `[SCREENSHOT: the Policy Generator UI freshly loaded — banner, stage pills, the three cards]`
 
 ## Part C — The CLI (no dependencies at all)
