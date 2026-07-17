@@ -51,14 +51,16 @@ class TestAuthor:
         (action,) = rule["rules"][0]["actions"]
         # governed filter: 'pii' survives, structural 'maskable' does not
         assert action["applyTags"] == [{"name": "pii"}]
-        assert action["assignBusinessTerm"] == [{"name": "Member Number", "id": "t-100"}]
+        # applyBusinessTerms is PDC 11's LIVE field name (assignBusinessTerm
+        # was silently dropped by the importer — fixed in 1.8.0)
+        assert action["applyBusinessTerms"] == [{"name": "Member Number", "id": "t-100"}]
 
     def test_dictionary_rule_shape(self, registry):
         (d,) = author.author(registry)["dictionaries"]
         assert d["csv"] == "Term\nCA\nNY\nTX\n"
         assert d["rule"]["rowCount"] == 3
         # unresolved id: binding is by name only
-        assert d["rule"]["rules"][0]["actions"][0]["assignBusinessTerm"] == [{"name": "State Code"}]
+        assert d["rule"]["rules"][0]["actions"][0]["applyBusinessTerms"] == [{"name": "State Code"}]
 
     def test_deterministic_ids(self, registry):
         a = author.author(registry)

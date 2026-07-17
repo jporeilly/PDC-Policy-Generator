@@ -1,6 +1,6 @@
 # Policy Generator — install & lab setup
 
-*App 1.7.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
+*App 1.8.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
 
 **Primary role:** Data Steward / Data Developer / IT Administrator
 **Estimated time:** 15–20 minutes (app only — the shared lab is a separate, one-time build)
@@ -65,7 +65,7 @@ flowchart LR
     end
     GGU == "Classification Registry" ==> PGU
     GGU -- "glossary JSONL &middot; Apply &middot;<br/>Resolve Term IDs &mdash; HTTPS" --> PDC
-    PGU -- "method import (UI) &middot;<br/>reconcile (public API v3)" --> PDC
+    PGU -- "deploy (import API) &middot; reconcile &middot;<br/>drift-check &middot; manual UI import" --> PDC
     PDC -- "scan &middot; profile &middot;<br/>data identification" --> PGDB
     PDC -- "Scan Files" --> MINIO
     ALT["alt: either app can run on the VM instead &mdash;<br/>bash run.sh --host 0.0.0.0 &rarr; http://192.168.1.200:500x"]
@@ -311,9 +311,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
-**Success looks like this:** `20 passed` — the suite builds a fixture Registry
-in memory and exercises the whole author pipeline plus the API (reconcile and
-retire run against a mocked PDC — fully offline). It also fails if any version
+**Success looks like this:** `35 passed` — the suite builds a fixture Registry
+in memory and exercises the whole author pipeline plus the API (reconcile,
+deploy, drift-check and retire run against a mocked PDC — fully offline). It also fails if any version
 marker (VERSION / VERSION.md / README / CHANGELOG) drifts out of agreement.
 
 Then load a real Registry in the UI (drag-drop, or paste its path) and check
@@ -337,17 +337,20 @@ The authored zip is shaped for PDC's UI import — the full walkthrough with
 checkpoints is the CSCU workshop
 (PDC-Scenarios' `courseware/CSCU/Policy/Workshop-Policy-Generator-CSCU.md`). In short:
 
-1. **Management → Data Identification → Patterns → Import** — the files
-   under `Patterns/`.
-2. **Management → Data Identification → Dictionaries → Import** — each
-   `*_rule.json` **with** its values CSV.
+1. **Management → Data Identification → Patterns → Import** — upload
+   `patterns-import.zip`.
+2. **Management → Data Identification → Dictionaries → Import** — upload
+   `dictionaries-import.zip` (each dictionary's rule JSON travels with its
+   values CSV inside).
 3. Run **Data Identification** on the scenario's sources (and **Scan Files**
    on the object store).
 4. Verify the governed tags landed — and only governed tags.
 
-The **reconcile / deploy / drift-check** stages will automate the PDC side
-over the public API (v3); they need API credentials, which the author stage
-never does.
+The manual import above is the reviewed-zip alternative: the **Deploy** stage
+does the same import programmatically (over PDC's own import endpoint), then
+verifies and re-stamps term ids, and **Drift-check** compares what is deployed
+against the Registry. Both need PDC credentials, which the author stage never
+does.
 
 ## Part G — Troubleshooting
 

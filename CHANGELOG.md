@@ -1,5 +1,82 @@
 # Changelog
 
+## [1.8.0] — 2026-07-17
+
+### Added — Deploy + Drift-check: the lifecycle is complete
+
+The app's five-stage lifecycle (Load → Author → Reconcile → Deploy →
+Drift-check) is now fully implemented; the last two stages were built against
+a live PDC 11.0.0 and verified end-to-end (import → verify → bind → retire).
+
+- **Deploy** (`POST /api/pdc/deploy`, DeployPage in the UI). PDC 11 has no
+  public import API for Data Identification methods, so the UI's own path
+  was discovered live: a multipart **`POST /api/importWorkerFiles`** (fields
+  `type` = `DATA_PATTERNS_IMPORTER` | `DICTIONARY_IMPORTER`, `fileName`,
+  `file`) — found by reading the SPA bundle (`/client/App.js`) after GraphQL
+  suggestion probing showed no import mutation (`DictionariesCreateOne` /
+  `DataPatternsCreateOne` exist, but the dictionary input carries no values
+  field — the CSV only travels in the zip). This app's author-stage zips
+  import **as-is** (same export layout), deterministic `_id`s preserved.
+  The response is a worker record; progress is polled over the `WorkersById`
+  GraphQL query (`pipeline.metadata.status`: RUNNING → COMPLETED/FAILED).
+  Deploy then re-lists the prefixed set to verify every method landed, and
+  **re-stamps the Registry's minted term ids** via `DictionariesUpdateById` /
+  `DataPatternsUpdateById` — necessary because the importer rewrites an id
+  it cannot resolve to the term name. `dry_run: true` returns the
+  create/update plan without touching PDC. Deploy is always prefix-scoped,
+  so the Reconcile page's scoped retire can clean up exactly what it
+  imported.
+- **Term-binding fix in Author** (the bug Deploy discovery surfaced): the
+  authored envelopes carried `assignBusinessTerm`, which is **not** in PDC
+  11's live schema — the importer silently dropped it, so the binding never
+  reached PDC. The live field is **`applyBusinessTerms`** `[{name, id}]`
+  (verified round-trip); author.py now emits it.
+- **Optional bulk identification** (`POST /api/pdc/identify`): triggers one
+  `DATA_IDENTIFICATION` job over **`POST /api/start-job`** (`{name, type:
+  START, data: {scope, dictionaryIds, dataPatternIds}}` — the exact payload
+  PDC's UI sends, read from the SPA bundle). An explicit entity-id scope is
+  required; never catalog-wide.
+- **Drift-check** (`POST /api/pdc/drift`, DriftPage in the UI, engine in the
+  new `policy_generator/drift.py`). Every deployed method under the prefix
+  is read in full (`DictionariesById` / `DataPatternsById`; `regexMatch`,
+  `metadataHints` and `rules[].actions` are JSON scalars on the live schema)
+  and compared against the Registry: governed tags vs the allow-list, term
+  binding (name + id), content regex and profile signature vs the seeds,
+  dictionary row counts (PDC does not expose dictionary values over GraphQL,
+  so the count is the honest proxy), and enabled state. Verdict per method:
+  **clean / drifted / orphaned / missing**, rendered reconcile-style with
+  the exact findings.
+- **UI**: the canonical shell gains Deploy (upload-tray icon) and Drift
+  (scales icon) in the WORKFLOW section; the stepper runs Load → Author →
+  Reconcile → Deploy → Drift. The PDC session now lives in App state so the
+  gates hold across pages: Deploy needs a Registry + PDC session + at least
+  one reconciled term id; Drift needs a Registry + PDC session. New
+  `GET /api/pdc/status` backs the gating.
+- **Tests**: 20 → 35. Mocked-PDC coverage for deploy (zip payload shape,
+  dry-run never uploads, prefix guard, verify + selective id binding),
+  identify (scope required, built-ins excluded), the drift endpoint, and a
+  drift-engine suite (clean echo, missing, orphaned, off-vocabulary tags,
+  importer-rewritten term ids, regex/row-count edits, disabled methods).
+- **UI polish**: collapsed-by-default explainer cards in the Glossary app's
+  details/summary pattern — the Registry contract (Load, with an inline-SVG
+  two-app handoff graphic: Glossary Generator → Registry → Policy Generator →
+  Data Identification in PDC), the skipped-groups legend (Author), what
+  Deploy does (Deploy), and reading the verdicts (Drift). The sidebar footer
+  now shows a live PDC session status (green dot + user when connected,
+  matching the Insights shell), and the OpenAPI title is "Policy Generator"
+  for tab-title consistency with the UI.
+
+### Changed — suite shell uniformity
+
+Suite shell uniformity — sidebar restructured to the shared shell (sections,
+icons, footer status, theme select), light default theme. The masthead layout
+is replaced by the canonical PDC suite shell from Catalog Insights: brand
+block (rounded app mark + two-line name + version chip that still opens the
+changelog), a WORKFLOW / CONFIGURE sectioned sidebar with inline SVG icons
+(Load / Author / Reconcile / Settings), a breadcrumb topbar, and a sidebar
+footer holding the API-docs link and the theme select. The stepper, pages and
+API are unchanged.
+
 ## [1.7.2] — 2026-07-17
 
 ### Changed — Windows-first install docs

@@ -1,9 +1,12 @@
 # Version
 
-**1.7.2** — 2026-07-17
+**1.8.0** — 2026-07-17
 
-Fix release on the 1.7 line: VM installer verify + frontend, doc/comment
-sweep. See [CHANGELOG.md](CHANGELOG.md) for history.
+The lifecycle is complete: **Deploy** (programmatic import over PDC's
+discovered import API, post-import term-id re-stamping, optional scoped
+DATA_IDENTIFICATION job) and **Drift-check** (per-method clean / drifted /
+orphaned / missing verdicts against the Registry) ship, both verified live
+against PDC 11.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
 The runtime source of truth is `policy_generator/VERSION` (the API banner and
 `python -m policy_generator --version` read it); a docs-consistency test keeps
 every marker in agreement.

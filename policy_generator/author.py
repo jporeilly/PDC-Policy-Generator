@@ -19,7 +19,7 @@ OBJECT — PDC's importer Gson-parses per file and rejects arrays.
 
 Every rule applies the concept's GOVERNED tags (filtered against the
 Registry's embedded allow-list — the drift guarantee starts at authoring)
-as applyTags {"name": tag}, plus a best-effort assignBusinessTerm action.
+as applyTags {"name": tag}, plus an applyBusinessTerms term binding.
 Deterministic ids (UUID5 from the rule name); only the lastUpdate/version
 timestamps vary between runs. Nothing here talks to PDC — output is files
 a steward reviews.
@@ -67,15 +67,22 @@ def _rule_tags(concept, allow):
 
 def _actions(tags, term, term_id):
     """ONE action object carrying applyTags (live export shape, {'name': tag})
-    plus a best-effort assignBusinessTerm. PDC's import validator walks every
-    action object and requires a tag in each ('No Tag found in Rule'), so the
-    term binding must ride in the SAME object as the tags — never its own."""
+    plus the term binding. PDC's import validator walks every action object
+    and requires a tag in each ('No Tag found in Rule'), so the term binding
+    must ride in the SAME object as the tags — never its own.
+
+    The binding field is applyBusinessTerms [{name, id}] — PDC 11's LIVE
+    schema name, verified round-trip on 2026-07-17. The assignBusinessTerm
+    spelling this app emitted through 1.7.x is NOT in the live schema and the
+    importer silently dropped it (the binding never reached PDC). Note the
+    importer rewrites an id it cannot resolve to the term name, which is why
+    the deploy stage re-stamps Registry ids after import."""
     act = {"applyTags": [{"name": t} for t in tags]}
     if term:
         bt = {"name": term}
         if term_id:
             bt["id"] = term_id
-        act["assignBusinessTerm"] = [bt]
+        act["applyBusinessTerms"] = [bt]
     return [act]
 
 

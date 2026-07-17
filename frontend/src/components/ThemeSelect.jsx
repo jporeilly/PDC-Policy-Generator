@@ -9,7 +9,7 @@ const THEMES = [
 
 export default function ThemeSelect() {
   const [theme, setTheme] = useState(
-    () => localStorage.getItem('mc-theme') ?? 'midnight',
+    () => localStorage.getItem('mc-theme') ?? 'light',
   )
 
   useEffect(() => {
@@ -19,6 +19,7 @@ export default function ThemeSelect() {
 
   return (
     <select
+      className="text"
       value={theme}
       onChange={(e) => setTheme(e.target.value)}
       aria-label="Color theme"

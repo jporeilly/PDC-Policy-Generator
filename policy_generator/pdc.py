@@ -1,15 +1,20 @@
 """
-pdc.py — lean PDC Public API client for the reconcile stage.
+pdc.py — lean PDC Public API client for the reconcile, deploy and
+drift-check stages.
 
 A verbatim subset of the Glossary Generator's battle-tested pdc_api.py
 (auth incl. the Keycloak-first path, and resolve_terms with its three
 fallback lookups — including the fix for the /search type-facet bug that
-once made Resolve match 0 terms). Stdlib only: no new dependencies.
+once made Resolve match 0 terms), plus the Data Identification method
+lifecycle (list / detail / import / bind / retire) discovered live against
+PDC 11.0.0. Stdlib only: no new dependencies.
 """
 from __future__ import annotations
 import json
 import re
 import ssl
+import time
+import uuid
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -147,8 +152,12 @@ def decode_jwt(token):
 #  The same Keycloak bearer token that drives the REST API authenticates it.
 # --------------------------------------------------------------------------- #
 _METHOD_KINDS = {
-    "Dictionary": {"many": "DictionariesMany", "remove": "DictionariesRemoveById"},
-    "DataPattern": {"many": "DataPatternsMany", "remove": "DataPatternsRemoveById"},
+    "Dictionary": {"many": "DictionariesMany", "remove": "DictionariesRemoveById",
+                   "by_id": "DictionariesById", "update": "DictionariesUpdateById",
+                   "update_input": "UpdateByIddictionariesInput"},
+    "DataPattern": {"many": "DataPatternsMany", "remove": "DataPatternsRemoveById",
+                    "by_id": "DataPatternsById", "update": "DataPatternsUpdateById",
+                    "update_input": "UpdateByIddatapatternsInput"},
 }
 
 
@@ -198,6 +207,166 @@ def remove_method(base_url, token, kind, _id, verify_tls=True, timeout=30):
         variables={"id": _id}, verify_tls=verify_tls, timeout=timeout)
     payload = data.get(spec["remove"]) or {}
     return payload.get("recordId")
+
+
+# --------------------------------------------------------------------------- #
+#  Deploy — import the authored method set into PDC (discovered live, 1.8.0)
+#
+#  PDC 11's UI imports Data Identification methods with a multipart upload to
+#  POST <base>/api/importWorkerFiles (fields: type, fileName, file), where
+#  `type` is DATA_PATTERNS_IMPORTER (accepts .zip/.json) or DICTIONARY_IMPORTER
+#  (accepts .zip in the nested Dictionary_Export layout). Discovered by
+#  reading the SPA bundle (/client/App.js) after GraphQL suggestion probing
+#  found no import mutation; verified live 2026-07-17: this app's own
+#  export-layout zips import as-is, deterministic _ids preserved. The response
+#  is a worker record ({_id, workerName: DATA_PATTERN_MANAGER |
+#  DICTIONARY_MANAGER}); progress is polled via the WorkersById GraphQL query
+#  (pipeline.metadata.status: RUNNING -> COMPLETED/FAILED).
+#
+#  Term binding: the LIVE schema's action field is applyBusinessTerms
+#  [{name, id}] — NOT assignBusinessTerm (silently dropped by the importer).
+#  The importer preserves applyBusinessTerms but rewrites an id it cannot
+#  resolve to the term name, so deploy re-stamps the exact Registry ids after
+#  import via <Kind>UpdateById(_id: String!, record: {rules}) — verified to
+#  persist round-trip.
+# --------------------------------------------------------------------------- #
+_IMPORTERS = {
+    "DataPattern": "DATA_PATTERNS_IMPORTER",
+    "Dictionary": "DICTIONARY_IMPORTER",
+}
+
+
+def upload_import(base_url, token, kind, filename, blob, verify_tls=True, timeout=120):
+    """Upload one import zip to POST /api/importWorkerFiles. `kind` is
+    'DataPattern' or 'Dictionary' (mapped to the discovered importer type).
+    Returns the worker record ({_id, workerName, ...}) PDC responds with."""
+    importer = _IMPORTERS.get(kind)
+    if not importer:
+        raise ValueError(f"unknown method kind: {kind!r}")
+    boundary = uuid.uuid4().hex
+    parts = []
+    for name, value in (("type", importer), ("fileName", filename)):
+        parts.append((f"--{boundary}\r\nContent-Disposition: form-data; "
+                      f'name="{name}"\r\n\r\n{value}\r\n').encode())
+    parts.append((f"--{boundary}\r\nContent-Disposition: form-data; "
+                  f'name="file"; filename="{filename}"\r\n'
+                  "Content-Type: application/zip\r\n\r\n").encode() + blob + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    url = clean_base(base_url) + "/api/importWorkerFiles"
+    req = urllib.request.Request(url, data=b"".join(parts), method="POST", headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Accept": "*/*",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ctx(verify_tls)) as r:
+            raw = r.read().decode("utf-8")
+            return json.loads(raw) if raw.strip() else {}
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")[:600]
+        except Exception:
+            pass
+        if e.code == 401:
+            raise TokenExpired(detail or "401 Unauthorized")
+        raise RuntimeError(f"HTTP {e.code} on POST {url}: {detail}")
+
+
+def worker_status(base_url, token, worker_id, verify_tls=True, timeout=30):
+    """One WorkersById poll -> {'status': RUNNING|COMPLETED|FAILED|None,
+    'label': ...}. The import workers report through pipeline.metadata."""
+    data = graphql(
+        base_url, token,
+        "query($id: MongoID!) { WorkersById(_id: $id) { workerName pipeline } }",
+        variables={"id": worker_id}, verify_tls=verify_tls, timeout=timeout)
+    w = data.get("WorkersById") or {}
+    md = ((w.get("pipeline") or {}).get("metadata") or {})
+    return {"status": md.get("status"), "label": (w.get("pipeline") or {}).get("label"),
+            "workerName": w.get("workerName")}
+
+
+def wait_worker(base_url, token, worker_id, verify_tls=True, timeout=120, poll=2.0):
+    """Poll a worker until COMPLETED/FAILED or `timeout` seconds. Returns the
+    final worker_status dict (status may still be RUNNING on timeout)."""
+    deadline = time.time() + timeout
+    last = {"status": None}
+    while time.time() < deadline:
+        last = worker_status(base_url, token, worker_id, verify_tls=verify_tls)
+        if last.get("status") in ("COMPLETED", "FAILED", "SUCCESS"):
+            return last
+        time.sleep(poll)
+    return last
+
+
+# Rule sub-selection: actions/confidenceScore/condition/regexMatch/
+# metadataHints are JSON scalars on the live schema (no sub-selection).
+_RULES_SEL = "rules { type minSamples confidenceScore condition actions }"
+
+
+def get_method(base_url, token, kind, _id, verify_tls=True, timeout=30):
+    """Full method detail by _id — everything drift-check compares: name,
+    enabled/builtIn, categories, tags + term bindings (in rules.actions),
+    regexMatch/profilePatterns (patterns), rowCount/csv (dictionaries).
+    Dictionary VALUES are not readable over GraphQL — rowCount is the proxy."""
+    spec = _METHOD_KINDS.get(kind)
+    if not spec:
+        raise ValueError(f"unknown method kind: {kind!r}")
+    extra = ("rowCount csv dictionaryTermId" if kind == "Dictionary"
+             else "regexMatch profilePatterns minSamples dataEventThreshold")
+    data = graphql(
+        base_url, token,
+        f"query($id: String!) {{ {spec['by_id']}(_id: $id) {{ "
+        f"_id name type isEnabled builtIn categories description {extra} "
+        f"{_RULES_SEL} metadataHints }} }}",
+        variables={"id": _id}, verify_tls=verify_tls, timeout=timeout)
+    return data.get(spec["by_id"]) or {}
+
+
+def bind_business_term(base_url, token, kind, _id, term_name, term_id,
+                       verify_tls=True, timeout=30):
+    """Stamp applyBusinessTerms [{name, id}] into every action of the method's
+    rules (read-modify-write via <Kind>UpdateById). This is how deploy binds
+    the Registry's minted term ids: the importer preserves the field but
+    rewrites ids it cannot resolve to the term name. Returns True on success."""
+    spec = _METHOD_KINDS.get(kind)
+    if not spec:
+        raise ValueError(f"unknown method kind: {kind!r}")
+    detail = get_method(base_url, token, kind, _id, verify_tls=verify_tls, timeout=timeout)
+    rules = detail.get("rules") or []
+    if not rules:
+        return False
+    bt = {"name": term_name}
+    if term_id:
+        bt["id"] = term_id
+    for rule in rules:
+        for act in (rule.get("actions") or []):
+            # the JSON scalar echoes schema nulls — drop them before writing back
+            for k in [k for k, v in list(act.items()) if v is None]:
+                act.pop(k)
+            act["applyBusinessTerms"] = [dict(bt)]
+    data = graphql(
+        base_url, token,
+        f"mutation($id: String!, $rec: {spec['update_input']}!) "
+        f"{{ {spec['update']}(_id: $id, record: $rec) {{ recordId }} }}",
+        variables={"id": _id, "rec": {"rules": rules}},
+        verify_tls=verify_tls, timeout=timeout)
+    return bool((data.get(spec["update"]) or {}).get("recordId"))
+
+
+def start_identification_job(base_url, token, scope, dictionary_ids, pattern_ids,
+                             verify_tls=True, timeout=30):
+    """Trigger one DATA_IDENTIFICATION bulk job over POST /api/start-job —
+    the exact payload PDC's own UI sends (read from the SPA bundle):
+    {name: DATA_IDENTIFICATION, type: START, data: {scope, dictionaryIds,
+    dataPatternIds}}. `scope` is a list of entity ids. Returns the job id."""
+    url = clean_base(base_url) + "/api/start-job"
+    body = {"name": "DATA_IDENTIFICATION", "type": "START",
+            "data": {"scope": list(scope or []),
+                     "dictionaryIds": list(dictionary_ids or []),
+                     "dataPatternIds": list(pattern_ids or [])}}
+    out = _req("POST", url, token=token, body=body, verify_tls=verify_tls, timeout=timeout)
+    return out.get("_id") or (out.get("data") or {}).get("_id")
 
 
 # --------------------------------------------------------------------------- #

@@ -95,8 +95,98 @@ export default function LoadPage({ summary, onLoaded }) {
         )}
       </section>
 
+      <RegistryContractExplainer />
+
       {summary && <SummaryCard summary={summary} />}
     </>
+  )
+}
+
+/* ---------- the Registry-contract explainer ---------- */
+
+// Two-app handoff, pure inline SVG — same approach as the Glossary app's
+// WorkflowDiagram (theme tokens only, no chart libraries). Static: these
+// boxes are other apps, not pages of this one.
+function HandoffDiagram() {
+  return (
+    <div className="ho-wrap">
+      <svg
+        className="ho"
+        viewBox="0 0 560 92"
+        aria-label="Handoff: the Glossary Generator writes the Classification Registry at Generate;
+          the Policy Generator reads it and authors Data Identification methods in PDC."
+      >
+        <defs>
+          <marker id="ho-arrowhead" viewBox="0 0 8 8" refX="7" refY="4"
+                  markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse"
+                  orient="auto-start-reverse">
+            <path className="ho-head" d="M0.5 0.5 L7.5 4 L0.5 7.5 Z" />
+          </marker>
+        </defs>
+
+        <path className="ho-arrow" d="M116 46 H138" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="127" y="36" textAnchor="middle">writes</text>
+        <path className="ho-arrow" d="M278 46 H300" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="289" y="36" textAnchor="middle">read by</text>
+        <path className="ho-arrow" d="M412 46 H434" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="423" y="36" textAnchor="middle">authors</text>
+
+        <g className="ho-node">
+          <rect x="2" y="26" width="114" height="40" rx="8" />
+          <text x="59" y="43" textAnchor="middle" dominantBaseline="middle">Glossary</text>
+          <text x="59" y="57" textAnchor="middle" dominantBaseline="middle">Generator</text>
+        </g>
+        <g className="ho-node ho-contract">
+          <rect x="140" y="26" width="138" height="40" rx="8" />
+          <text x="209" y="43" textAnchor="middle" dominantBaseline="middle">Classification</text>
+          <text x="209" y="57" textAnchor="middle" dominantBaseline="middle">Registry</text>
+          <text className="ho-sub" x="209" y="80" textAnchor="middle">the contract — one governed row per concept</text>
+        </g>
+        <g className="ho-node">
+          <rect x="302" y="26" width="110" height="40" rx="8" />
+          <text x="357" y="43" textAnchor="middle" dominantBaseline="middle">Policy</text>
+          <text x="357" y="57" textAnchor="middle" dominantBaseline="middle">Generator</text>
+        </g>
+        <g className="ho-node">
+          <rect x="436" y="26" width="122" height="40" rx="8" />
+          <text x="497" y="43" textAnchor="middle" dominantBaseline="middle">Data Identification</text>
+          <text className="ho-sub" x="497" y="57" textAnchor="middle" dominantBaseline="middle">in PDC</text>
+        </g>
+      </svg>
+    </div>
+  )
+}
+
+// Why this app loads a file instead of scanning anything — the contract,
+// told for a first-time user. Same collapsed-summary pattern as the
+// Glossary app's explainer panels (details.card > summary), collapsed by
+// default.
+function RegistryContractExplainer() {
+  return (
+    <details className="card">
+      <summary>Under the hood — the Registry contract</summary>
+      <HandoffDiagram />
+      <ul className="workcycle">
+        <li>
+          The <b>Glossary Generator writes the Registry at Generate</b> — the same moment
+          it writes the glossary import JSONL, so both always describe the same reviewed
+          state.
+        </li>
+        <li>
+          <b>One governed row per concept</b>, carrying the facts a steward already
+          decided: the business term (and its minted id once resolved), the governed tags
+          from the controlled allow-list, the floor-lifted sensitivity, and the
+          <b> detection seeds</b> — value regexes and reference lists induced from
+          profiled data.
+        </li>
+        <li>
+          This app <b>reads those facts instead of re-deciding them</b>: every method it
+          authors copies the term, tags and seeds verbatim from the row. No hand-typed
+          regex, no re-tagged column — so what PDC identifies can never quietly diverge
+          from what the glossary governs.
+        </li>
+      </ul>
+    </details>
   )
 }
 

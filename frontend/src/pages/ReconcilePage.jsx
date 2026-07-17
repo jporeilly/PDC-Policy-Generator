@@ -9,8 +9,8 @@ const STATUS = {
 
 const BATCH = 25
 
-export default function ReconcilePage({ summary, onSummary }) {
-  const [pdc, setPdc] = useState(null)          // connected info
+export default function ReconcilePage({ summary, onSummary, pdc, onPdc }) {
+  // pdc (the connected-session info) lives in App state: Deploy and Drift gate on it
   const [form, setForm] = useState({ base_url: '', username: '', password: '', token: '', verify_tls: false })
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState(null)
@@ -35,7 +35,7 @@ export default function ReconcilePage({ summary, onSummary }) {
     setBusy(true)
     setError(null)
     try {
-      setPdc(await post('/api/pdc/connect', form))
+      onPdc(await post('/api/pdc/connect', form))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -64,7 +64,7 @@ export default function ReconcilePage({ summary, onSummary }) {
       }
     } catch (err) {
       setError(err.message)
-      if (err.message.includes('expired')) setPdc(null)
+      if (err.message.includes('expired')) onPdc(null)
     } finally {
       setBusy(false)
       setProgress(null)

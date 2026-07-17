@@ -12,6 +12,43 @@ const BUCKETS = {
              hint: 'Term-to-column mapping (not identification) is the governance mechanism here.' },
 }
 
+// The 1.5.x "What these groups mean" legend, in the suite's expandable
+// explainer pattern (details.card > summary, collapsed by default): a
+// skipped concept is not ungoverned — a different mechanism owns it.
+function SkippedGroupsExplainer() {
+  return (
+    <details className="card" style={{ marginTop: '.6rem' }}>
+      <summary>What these groups mean — why a skipped concept is still governed</summary>
+      <p className="hint-line">
+        Identification methods only make sense for values with a stable, recognizable
+        shape. Everything else is governed by a different mechanism — the buckets name
+        which one:
+      </p>
+      <ul className="workcycle">
+        <li>
+          <b>⚠ Needs a detection seed</b> — identifiable data (SSN, email, phone…) whose
+          scan produced no seed. Fix it glossary-side: re-scan, or add a curated seed to
+          the domain pack, then re-export the Registry. The only amber bucket — the only
+          one that wants action here.
+        </li>
+        <li>
+          <b>· Structural — correctly method-less</b> — record/report/summary concepts
+          describe containers, not values; no method <i>should</i> exist.
+        </li>
+        <li>
+          <b>ℹ Free text — needs a vocabulary rule</b> — notes and description fields
+          have no stable shape; vocabulary dictionaries or business rules govern them.
+        </li>
+        <li>
+          <b>· Govern by mapping</b> — the Glossary app's Apply step already stamps term,
+          tags and sensitivity onto the steward-mapped columns; identification would add
+          nothing.
+        </li>
+      </ul>
+    </details>
+  )
+}
+
 export default function AuthorPage({ summary }) {
   const [prefix, setPrefix] = useState('')
   const [preview, setPreview] = useState(null)
@@ -145,6 +182,7 @@ export default function AuthorPage({ summary }) {
             {preview.skipped.length > 0 && (
               <>
                 <h3 className="subhead">Skipped concepts ({preview.skipped.length}) — grouped by governance mechanism</h3>
+                <SkippedGroupsExplainer />
                 {Object.entries(BUCKETS).map(([key, b]) => {
                   const items = skippedByBucket[key]
                   if (!items?.length) return null

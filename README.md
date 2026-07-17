@@ -1,10 +1,14 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.7.2 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+**Version:** 1.8.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
 
-> **1.7.0 — React + FastAPI port.** The web layer is now a React (Vite) UI on a
-> FastAPI backend with auto-generated API docs at `/docs`; the deterministic
-> engine and the CLI are unchanged. Tests moved to pytest.
+> **1.8.0 — the lifecycle is complete: Deploy + Drift-check ship.** Deploy
+> imports the authored set into PDC programmatically over the same endpoint
+> PDC 11's own UI zip-upload uses (discovered live: multipart
+> `POST /api/importWorkerFiles`), verifies every method landed, and re-stamps
+> the reconciled term ids. Drift-check compares every deployed method against
+> the Registry — tags, term bindings, regexes, dictionary counts — with a
+> clean / drifted / orphaned / missing verdict per method.
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -17,8 +21,6 @@ It is the second half of a two-app governance pipeline, and it is
 stage: every regex and reference list it emits was induced from profiled data
 by the [Glossary Generator](https://github.com/jporeilly/PDC-Glossary-Generator)'s
 scan and travels inside the Registry.
-
-![The Author page: Registry loaded, method preview with id-bound rules, and the mechanism-color-coded skipped groups](images/policy-generator-author.png)
 
 ## Why — the Registry
 
@@ -47,8 +49,8 @@ own split between the Business Glossary and Data Identification:
    | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
    | **Author**      | one DataPattern envelope per regex seed, one Dictionary envelope (+ Term-header values CSV) per reference-list seed — the exact format PDC's own Export produces, each applying the Registry's governed tags   | **working** |
    | **Reconcile**   | verify each concept's minted `term_id` against a live PDC (Keycloak-first auth; the Glossary app's proven three-path term lookup) and bind authoring to the ids                                              | **working** |
-   | **Deploy**      | import the methods over the public API (v3) and trigger `DATA_IDENTIFICATION` bulk jobs scoped to the right entities                                                                                         | next              |
-   | **Drift-check** | compare deployed methods' Assign-Tags and PDC's live tag facet against the Registry's governed vocabulary — flag methods stamping off-vocabulary tags, governed tags nothing emits, and broken term bindings | next              |
+   | **Deploy**      | import the methods programmatically over PDC's import API (multipart `/api/importWorkerFiles`, discovered live — the same path the UI's zip upload takes), verify each landed, re-stamp reconciled term ids, and optionally trigger a `DATA_IDENTIFICATION` bulk job scoped to chosen entities | **working** |
+   | **Drift-check** | compare every deployed method against the Registry's governed facts — off-vocabulary or missing tags, broken term bindings (name + id), edited regexes/signatures, changed dictionary row counts, disabled methods — verdict per method: clean / drifted / orphaned / missing              | **working** |
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','clusterBkg':'#F7FBFD','clusterBorder':'#CFE3EC','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':30,'rankSpacing':45}}}%%
@@ -65,7 +67,7 @@ flowchart TB
     REG[["Classification Registry<br/><small>one governed row per concept:<br/>term &middot; tags &middot; sensitivity &middot; seeds &middot; sources</small>"]]
     subgraph PG["Policy Generator &mdash; :5001"]
         direction LR
-        AUT["&#9312; Author"] --> RECON["&#9313; Reconcile"] --> DEPL["&#9314; Deploy<br/><small>roadmap</small>"] --> DRIFT["&#9315; Drift-check<br/><small>roadmap</small>"]
+        AUT["&#9312; Author"] --> RECON["&#9313; Reconcile"] --> DEPL["&#9314; Deploy"] --> DRIFT["&#9315; Drift-check"]
     end
     PDC[("Pentaho Data Catalog 11 &mdash; the governed estate")]
 
@@ -74,23 +76,21 @@ flowchart TB
     GG == "&#9315; writes<br/>the contract" ==> REG
     REG == "&#9312; reads<br/>the contract" ==> PG
     GG -- "&#9314; glossary JSONL + Apply<br/><small>mapping-based binding</small>" --> PDC
-    PG -- "&#9312; custom patterns + dictionaries<br/><small>value-based recognition</small>" --> PDC
+    PG -- "&#9314; custom patterns + dictionaries<br/><small>imported over the import API</small>" --> PDC
     PG <-. "&#9313; minted<br/>term ids" .-> PDC
-    PG -. "&#9315; live tag facet vs<br/>governed vocabulary" .-> PDC
+    PG -- "&#9315; deployed methods vs<br/>the Registry's governed facts" --> PDC
 
     style GG fill:#EFF7FA,stroke:#9CC4D4
     style PG fill:#FDFBF2,stroke:#DFCE8F
     style EST fill:#F7FBFD,stroke:#CFE3EC
     classDef contract fill:#0A3D52,color:#fff,stroke:#0A3D52,stroke-width:2px
     classDef pdc fill:#DBEEF3,stroke:#065A82,color:#0A3D52,stroke-width:2px
-    classDef roadmap fill:#F4F6F7,stroke:#9AA5AB,color:#5B6770,stroke-dasharray:4 3
     classDef pack fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
     classDef stage fill:#FFFFFF,stroke:#1C7293,color:#0A3D52
     class REG contract
     class PDC pdc
-    class DEPL,DRIFT roadmap
     class PACK pack
-    class SCAN,REV,GOV,GEN,AUT,RECON stage
+    class SCAN,REV,GOV,GEN,AUT,RECON,DEPL,DRIFT stage
 ```
 
 Because both apps draw from the same Registry row, the glossary term, the
@@ -110,7 +110,7 @@ flowchart TB
     A -- "Glossary app's<br/>Apply step" --> PDC[("PDC governed estate")]
     I -- "this app's<br/>authored methods" --> PDC
     R -- "steward checks" --> PDC
-    PDC -. "<b>drift-check</b> (roadmap):<br/>anything off-vocabulary is flagged" .-> C
+    PDC -. "<b>drift-check</b>:<br/>anything off-vocabulary is flagged" .-> C
 
     classDef map fill:#DBEEF3,stroke:#1C7293,color:#0A3D52
     classDef ident fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
@@ -135,8 +135,9 @@ flowchart TB
 - **Author** — preview the method manifest, inspect any rule (governed tag
   chips, column hint, the **full JSON exactly as PDC imports it**, and a
   live tester for the regex or dictionary values), then download the set as
-  one zip: `Patterns/`, `Dictionaries/` (+ values CSVs), `INDEX.csv` — the
-  exact shapes PDC's **Management → Data Identification → Import** accepts.
+  one zip: `patterns-import.zip`, `dictionaries-import.zip` (values CSVs
+  inside), `INDEX.csv` — the exact layout PDC's **Management → Data
+  Identification → Import** accepts (and the Deploy stage uploads).
   Tags are re-filtered against the Registry's embedded allow-list at
   authoring time; off-vocabulary tags are refused, never imported.
 - **Explain, don't confuse** — concepts without seeds are grouped into
@@ -149,21 +150,35 @@ flowchart TB
   expandable **"Under the hood"** panels explain every concept (what each
   summary number means, how a seed becomes a method field-by-field) and show
   the exact calls each step runs — this app's own API, the manual PDC import
-  path, and the deploy-stage public-API calls, badged *roadmap* until they
-  ship.
+  path, and the deploy-stage import calls.
 - **Reconcile** — connect to PDC (token held in memory only), look every
   concept's term up with the Glossary app's proven three-path lookup, and see
   verified / resolved / mismatch / missing per term. One click stamps the
   PDC ids into the loaded Registry so re-authored rules bind **by id**;
   export keeps a reconciled copy.
+- **Deploy** — import the authored set into PDC programmatically over the
+  same endpoint the UI's zip upload uses (multipart
+  `POST /api/importWorkerFiles`, discovered live), wait for the import
+  workers, verify every method landed, and re-stamp the reconciled term ids
+  into each method's term binding (PDC's importer rewrites ids it cannot
+  resolve). Dry-run shows the create/update plan first; an optional
+  `DATA_IDENTIFICATION` bulk job can be triggered scoped to chosen entity
+  ids. Everything imported carries the authoring prefix, so the scoped
+  retire can always clean it up.
+- **Drift-check** — read every deployed method under the prefix and compare
+  it against the Registry: governed tags vs the allow-list, term binding
+  (name **and** id), content regex + profile signature vs the seeds,
+  dictionary row counts. Verdict per method — clean / drifted / orphaned /
+  missing — rendered reconcile-style with the exact findings.
 - **Same engine on the CLI** — `python -m policy_generator info|author`,
   zero dependencies, for scripted or headless use.
 
 ## Repository layout
 
 ```text
-policy_generator/       the app: engine (registry.py, author.py, pdc.py), CLI,
-                        FastAPI web layer (api.py), launchers, VERSION
+policy_generator/       the app: engine (registry.py, author.py, pdc.py,
+                        drift.py), CLI, FastAPI web layer (api.py), launchers,
+                        VERSION
 frontend/               React (Vite) UI — served by the API from frontend/dist
 tests/                  pytest suite: engine invariants, API flows (PDC mocked),
                         docs-consistency enforcement
@@ -179,6 +194,22 @@ install-pdc-demo.sh     install/update the app inside the lab VM's ~/PDC-Demo
 ```
 
 ## Install & run
+
+Once the app is up, one pass through it is short — five stages, all working;
+the manual UI import stays available as the reviewed-zip alternative to
+Deploy:
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#EEF6FA','primaryBorderColor':'#1C7293','primaryTextColor':'#22333B','secondaryColor':'#DBEEF3','tertiaryColor':'#F7FBFD','lineColor':'#1C7293','fontFamily':'Segoe UI, sans-serif','fontSize':'13px','clusterBkg':'#F7FBFD','clusterBorder':'#CFE3EC'}}}%%
+flowchart LR
+    L["Load<br/>Classification Registry"] --> A["Author<br/>patterns + dictionaries"]
+    A --> R["Reconcile<br/>term ids ↔ PDC"]
+    R --> D["Deploy<br/>import API + id re-stamp"]
+    D --> DC["Drift-check<br/>deployed vs governed"]
+    A -.-> I["Manual alternative:<br/>ZIP · Management →<br/>Data Identification → Import"] -.-> DC
+    classDef pdc fill:#DBEEF3,stroke:#065A82,color:#0A3D52,stroke-width:2px
+    class I pdc
+```
 
 **Requirements:** Python 3.9+. PDC is reached only when *you* import and run
 the methods — the app itself stays offline. **No LLM.**
@@ -254,11 +285,14 @@ authoritative build guide.
 
 ## Status
 
-The **author** stage works end-to-end from a real Registry — over the web UI
-or the CLI — and **reconcile** (verify/bind term ids against a live PDC, plus
-scoped retire of the imported set) works over the web UI. Both are covered by
-the offline pytest suite (PDC mocked). Deploy and drift-check are the roadmap,
-in that order — drift needs deployed methods to check.
+All five stages work end-to-end. **Author** runs from a real Registry over
+the web UI or the CLI; **reconcile** (verify/bind term ids, scoped retire),
+**deploy** (programmatic import over PDC's own import endpoint, verified
+live against PDC 11.0.0, with post-import term-id re-stamping) and
+**drift-check** (per-method clean / drifted / orphaned / missing verdicts)
+run over the web UI against a live PDC. Everything is covered by the offline
+pytest suite (PDC mocked). Remaining roadmap: writing the deployed method
+binding back into the Registry's reserved `method` field.
 
 *All scenario data referenced here (CSCU et al.) is fictional and generated
 for training.*

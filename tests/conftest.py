@@ -65,12 +65,15 @@ def loaded_client(api_client, registry_file):
 @pytest.fixture
 def fake_pdc(monkeypatch):
     """Replace every live-PDC call in the api module's pdc binding."""
+    import io
+    import zipfile
+
     from policy_generator import api as api_mod
 
     class TokenExpired(Exception):
         pass
 
-    calls = {"removed": []}
+    calls = {"removed": [], "uploads": [], "binds": [], "jobs": [], "waited": []}
 
     def auth(base, user, pw, version="v3", verify_tls=False, realm="pdc"):
         if pw != "good":
@@ -87,11 +90,32 @@ def fake_pdc(monkeypatch):
         }
         return {n: copy.deepcopy(table[n]) for n in names if n in table}
 
+    # The live catalog: the fixture Registry's two authored methods (clean
+    # pattern, drifted dictionary), one built-in clone, one orphan.
+    def _details():
+        return {
+            "m1": {"_id": "m1", "name": "Claims Member Number", "type": "DataPattern",
+                   "isEnabled": True, "builtIn": False,
+                   "regexMatch": {"regex": ["^MBR-\\d{6}$"]},
+                   "profilePatterns": ["AAA-999999"],
+                   "rules": [{"actions": [{"applyTags": [{"name": "pii"}],
+                                           "applyBusinessTerms": [{"name": "Member Number", "id": "t-100"}]}]}]},
+            "m2": {"_id": "m2", "name": "Claims State Code", "type": "Dictionary",
+                   "isEnabled": True, "builtIn": False,
+                   "rowCount": 5,   # Registry seeds 3 values -> row-count drift
+                   "rules": [{"actions": [{"applyTags": [{"name": "internal"}]}]}]},
+            "m4": {"_id": "m4", "name": "Claims Legacy Thing", "type": "DataPattern",
+                   "isEnabled": True, "builtIn": False,
+                   "regexMatch": {"regex": ["^X$"]},
+                   "rules": [{"actions": [{"applyTags": [{"name": "pii"}]}]}]},
+        }
+
     def list_methods(base, token, prefix=None, verify_tls=False):
         rows = [
-            {"_id": "m1", "name": "Claims Member Number", "kind": "pattern", "builtIn": False, "isEnabled": True},
-            {"_id": "m2", "name": "Claims State Code", "kind": "dictionary", "builtIn": False, "isEnabled": True},
-            {"_id": "m3", "name": "Claims Builtin Clone", "kind": "pattern", "builtIn": True, "isEnabled": True},
+            {"_id": "m1", "name": "Claims Member Number", "kind": "DataPattern", "builtIn": False, "isEnabled": True},
+            {"_id": "m2", "name": "Claims State Code", "kind": "Dictionary", "builtIn": False, "isEnabled": True},
+            {"_id": "m3", "name": "Claims Builtin Clone", "kind": "DataPattern", "builtIn": True, "isEnabled": True},
+            {"_id": "m4", "name": "Claims Legacy Thing", "kind": "DataPattern", "builtIn": False, "isEnabled": True},
         ]
         return [r for r in rows if not prefix or r["name"].startswith(prefix)]
 
@@ -99,9 +123,35 @@ def fake_pdc(monkeypatch):
         calls["removed"].append(_id)
         return f"rec-{_id}"
 
-    monkeypatch.setattr(api_mod.pdc_mod, "auth", auth)
-    monkeypatch.setattr(api_mod.pdc_mod, "decode_jwt", decode_jwt)
-    monkeypatch.setattr(api_mod.pdc_mod, "resolve_terms", resolve_terms)
-    monkeypatch.setattr(api_mod.pdc_mod, "list_methods", list_methods)
-    monkeypatch.setattr(api_mod.pdc_mod, "remove_method", remove_method)
+    def upload_import(base, token, kind, filename, blob, verify_tls=False, timeout=120):
+        with zipfile.ZipFile(io.BytesIO(blob)) as z:
+            names = z.namelist()
+        calls["uploads"].append({"kind": kind, "filename": filename, "entries": names})
+        return {"_id": f"w-{kind}", "workerName": f"{kind.upper()}_MANAGER"}
+
+    def wait_worker(base, token, worker_id, verify_tls=False, timeout=120, poll=2.0):
+        calls["waited"].append(worker_id)
+        return {"status": "COMPLETED", "workerName": "X"}
+
+    def get_method(base, token, kind, _id, verify_tls=False, timeout=30):
+        return copy.deepcopy(_details()[_id])
+
+    def bind_business_term(base, token, kind, _id, term_name, term_id,
+                           verify_tls=False, timeout=30):
+        calls["binds"].append({"kind": kind, "_id": _id, "term": term_name, "id": term_id})
+        return True
+
+    def start_identification_job(base, token, scope, dictionary_ids, pattern_ids,
+                                 verify_tls=False, timeout=30):
+        calls["jobs"].append({"scope": list(scope), "dictionaryIds": list(dictionary_ids),
+                              "dataPatternIds": list(pattern_ids)})
+        return "job-1"
+
+    for name, fn in [("auth", auth), ("decode_jwt", decode_jwt),
+                     ("resolve_terms", resolve_terms), ("list_methods", list_methods),
+                     ("remove_method", remove_method), ("upload_import", upload_import),
+                     ("wait_worker", wait_worker), ("get_method", get_method),
+                     ("bind_business_term", bind_business_term),
+                     ("start_identification_job", start_identification_job)]:
+        monkeypatch.setattr(api_mod.pdc_mod, name, fn)
     return calls

@@ -19,20 +19,27 @@ from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
-from policy_generator import __version__, author as author_mod, pdc as pdc_mod, registry as registry_mod
+from policy_generator import (
+    __version__,
+    author as author_mod,
+    drift as drift_mod,
+    pdc as pdc_mod,
+    registry as registry_mod,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UI_DIST = REPO_ROOT / "frontend" / "dist"
 
 app = FastAPI(
-    title="PDC Policy Generator",
+    title="Policy Generator",
     version=__version__,
     description=(
         "**[← Back to the Policy Generator](/)**\n\n"
         "Reads the Glossary Generator's Classification Registry and manages PDC's "
         "Data Identification side of the contract: author import-ready Data Patterns "
-        "and Dictionaries, reconcile term ids against a live PDC, and retire an "
-        "authored method set."
+        "and Dictionaries, reconcile term ids against a live PDC, deploy the authored "
+        "set over the import API, drift-check the deployed methods against the "
+        "Registry, and retire an authored method set."
     ),
 )
 
@@ -89,6 +96,22 @@ class PrefixRequest(BaseModel):
 class RetireRequest(BaseModel):
     prefix: str
     ids: list[str] | None = None
+
+
+class DeployRequest(BaseModel):
+    prefix: str | None = None
+    dry_run: bool = False
+    bind: bool = True          # re-stamp Registry term ids after import
+    wait_seconds: int = 120    # per import worker
+
+
+class IdentifyRequest(BaseModel):
+    prefix: str
+    scope: list[str]           # entity ids the bulk job is limited to
+
+
+class DriftRequest(BaseModel):
+    prefix: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -344,6 +367,185 @@ def api_pdc_retire(body: RetireRequest) -> dict:
     removed = sum(1 for r in results if r.get("removed"))
     return {"results": results, "removed": removed,
             "attempted": len(results), "prefix": prefix}
+
+
+# --------------------------------------------------------------------------- #
+#  Deploy — import the authored set into PDC over the discovered import API
+# --------------------------------------------------------------------------- #
+@app.get("/api/pdc/status")
+def api_pdc_status() -> dict:
+    """Whether this session holds a live PDC connection (the UI's gate for
+    the Deploy and Drift steps)."""
+    p = _state.get("pdc")
+    if not p:
+        return {"connected": False}
+    who = pdc_mod.decode_jwt(p["token"])
+    return {"connected": True, "base": p["base"],
+            "username": who.get("username"), "expires_in": who.get("expires_in")}
+
+
+def _live_index(p, prefix):
+    """Non-built-in methods carrying the prefix, keyed by (kind, name)."""
+    rows = pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
+                                verify_tls=p["verify_tls"])
+    return {(m["kind"], m["name"]): m for m in rows if not m.get("builtIn")}
+
+
+@app.post("/api/pdc/deploy")
+def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
+    """Import the authored method set into PDC programmatically — the path
+    PDC 11's own UI zip-upload uses (multipart POST /api/importWorkerFiles,
+    discovered live; see pdc.upload_import). Per-method results; `dry_run`
+    returns the create/update plan without touching PDC.
+
+    Every method name carries the authoring prefix, so the scoped retire on
+    the Reconcile page can always clean up exactly what deploy imported.
+    After import, the Registry's minted term ids are re-stamped into each
+    method's applyBusinessTerms (the importer rewrites ids it cannot
+    resolve); pass bind=false to skip."""
+    _require_registry()
+    p = _require_pdc()
+    body = body or DeployRequest()
+    art = _author_or_400((body.prefix or "").strip() or None)
+    prefix = art["prefix"]
+    if not prefix or len(prefix.strip()) < 2:
+        raise HTTPException(status_code=400,
+                            detail="a name prefix of at least 2 characters is required — "
+                                   "deploy is always scoped so retire can clean it up")
+    expected = drift_mod.expected_methods(art)
+
+    try:
+        live = _live_index(p, prefix)
+    except pdc_mod.TokenExpired:
+        raise _expired()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"method list failed: {e}")
+
+    if body.dry_run:
+        rows = [{"kind": e["kind"], "name": e["name"], "term": e["term"],
+                 "term_id": e.get("term_id"),
+                 "action": "update" if (e["kind"], e["name"]) in live else "create"}
+                for e in expected]
+        return {"prefix": prefix, "dry_run": True, "rows": rows,
+                "counts": {"create": sum(1 for r in rows if r["action"] == "create"),
+                           "update": sum(1 for r in rows if r["action"] == "update")}}
+
+    # one importer worker per artifact kind, exactly like the UI's zip upload
+    workers = []
+    try:
+        if art["patterns"]:
+            w = pdc_mod.upload_import(p["base"], p["token"], "DataPattern",
+                                      "patterns-import.zip",
+                                      author_mod.patterns_zip_bytes(art),
+                                      verify_tls=p["verify_tls"])
+            st = pdc_mod.wait_worker(p["base"], p["token"], w.get("_id"),
+                                     verify_tls=p["verify_tls"], timeout=body.wait_seconds)
+            workers.append({"kind": "DataPattern", "worker_id": w.get("_id"),
+                            "workerName": w.get("workerName"), "status": st.get("status")})
+        if art["dictionaries"]:
+            w = pdc_mod.upload_import(p["base"], p["token"], "Dictionary",
+                                      "dictionaries-import.zip",
+                                      author_mod.dictionaries_zip_bytes(art),
+                                      verify_tls=p["verify_tls"])
+            st = pdc_mod.wait_worker(p["base"], p["token"], w.get("_id"),
+                                     verify_tls=p["verify_tls"], timeout=body.wait_seconds)
+            workers.append({"kind": "Dictionary", "worker_id": w.get("_id"),
+                            "workerName": w.get("workerName"), "status": st.get("status")})
+    except pdc_mod.TokenExpired:
+        raise _expired()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"import upload failed: {e}")
+
+    try:
+        live = _live_index(p, prefix)
+    except pdc_mod.TokenExpired:
+        raise _expired()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"post-import verify failed: {e}")
+
+    rows = []
+    for e in expected:
+        m = live.get((e["kind"], e["name"]))
+        row = {"kind": e["kind"], "name": e["name"], "term": e["term"],
+               "term_id": e.get("term_id"), "imported": m is not None,
+               "_id": m and m.get("_id"), "bound": None}
+        if m and body.bind and e.get("term_id"):
+            try:
+                row["bound"] = pdc_mod.bind_business_term(
+                    p["base"], p["token"], e["kind"], m["_id"],
+                    e["term"], e["term_id"], verify_tls=p["verify_tls"])
+            except pdc_mod.TokenExpired:
+                raise _expired()
+            except Exception as ex:
+                row["bound"] = False
+                row["error"] = str(ex)[:300]
+        rows.append(row)
+    counts = {"imported": sum(1 for r in rows if r["imported"]),
+              "failed": sum(1 for r in rows if not r["imported"]),
+              "bound": sum(1 for r in rows if r["bound"])}
+    return {"prefix": prefix, "dry_run": False, "workers": workers,
+            "rows": rows, "counts": counts}
+
+
+@app.post("/api/pdc/identify")
+def api_pdc_identify(body: IdentifyRequest) -> dict:
+    """Trigger one DATA_IDENTIFICATION bulk job scoped to the given entity ids
+    and to the prefixed method set (POST /api/start-job — the payload PDC's
+    own UI sends). An explicit scope is required: this never sweeps the
+    whole catalog."""
+    p = _require_pdc()
+    prefix = body.prefix.strip()
+    if not prefix:
+        raise HTTPException(status_code=400, detail="a name prefix is required")
+    if not body.scope:
+        raise HTTPException(status_code=400,
+                            detail="an entity-id scope is required — identification "
+                                   "jobs are never catalog-wide from here")
+    try:
+        methods = [m for m in pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
+                                                   verify_tls=p["verify_tls"])
+                   if not m.get("builtIn")]
+        job_id = pdc_mod.start_identification_job(
+            p["base"], p["token"], body.scope,
+            [m["_id"] for m in methods if m["kind"] == "Dictionary"],
+            [m["_id"] for m in methods if m["kind"] == "DataPattern"],
+            verify_tls=p["verify_tls"])
+    except pdc_mod.TokenExpired:
+        raise _expired()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"identification job failed: {e}")
+    return {"job_id": job_id, "methods": len(methods), "scope": len(body.scope)}
+
+
+# --------------------------------------------------------------------------- #
+#  Drift-check — deployed methods vs the Registry's governed facts
+# --------------------------------------------------------------------------- #
+@app.post("/api/pdc/drift")
+def api_pdc_drift(body: DriftRequest | None = None) -> dict:
+    """Compare every deployed method under the prefix against the loaded
+    Registry: governed tags vs the allow-list, term binding (name + id),
+    regex/signature vs the seeds, dictionary row counts. Verdict per method:
+    clean / drifted / orphaned / missing."""
+    _require_registry()
+    p = _require_pdc()
+    body = body or DriftRequest()
+    art = _author_or_400((body.prefix or "").strip() or None)
+    prefix = art["prefix"]
+    try:
+        live = _live_index(p, prefix)
+        details = []
+        for (kind, _name), m in live.items():
+            d = pdc_mod.get_method(p["base"], p["token"], kind, m["_id"],
+                                   verify_tls=p["verify_tls"])
+            d["kind"] = kind
+            details.append(d)
+    except pdc_mod.TokenExpired:
+        raise _expired()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"drift read failed: {e}")
+    out = drift_mod.evaluate(art, details, registry_mod.governed_tags(_state["reg"]))
+    out["prefix"] = prefix
+    return out
 
 
 def _reconcile_rows(concepts, found):

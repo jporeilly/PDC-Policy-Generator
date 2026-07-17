@@ -35,10 +35,13 @@ sequenceDiagram
         PG->>PDC: verify each term_id (three-path lookup)
         PG->>REG: stamp verified ids — export a reconciled copy
     end
-    note over PDC,PG: roadmap — deploy + drift-check
-    PG--)PDC: import methods over public API v3, trigger DATA_IDENTIFICATION
-    PDC--)PG: live tag facet, compared against tag_vocabulary
-    PG--)REG: write back the method binding (the reserved field)
+    rect rgb(238,246,250)
+        note over PDC,PG: Deploy + Drift-check — the contract is enforced
+        PG->>PDC: import methods (multipart /api/importWorkerFiles),<br/>verify, re-stamp term ids; optional DATA_IDENTIFICATION job
+        PDC-->>PG: deployed methods read back in full
+        PG->>PG: drift verdicts — tags vs allow-list, term bindings,<br/>regexes/signatures, dictionary row counts
+    end
+    note over REG,PG: roadmap — write back the method binding (the reserved field)
 ```
 
 ## Envelope
@@ -56,7 +59,7 @@ sequenceDiagram
 | Field | Meaning | Used by this app for |
 | --- | --- | --- |
 | `concept` | stable slug of the term | filenames, matching |
-| `term_name` | the governed business term | `assignBusinessTerm`, name binding |
+| `term_name` | the governed business term | `applyBusinessTerms`, name binding |
 | `term_id` | PDC's minted term id (null until glossary import + Resolve) | id binding (reconcile) |
 | `sensitivity` | LOW / MEDIUM / HIGH, floor-lifted | drift checks vs tag floors |
 | `tags` | governed, lower-case | rule `applyTags` (re-filtered against `tag_vocabulary.allow_list` at authoring) |
@@ -66,7 +69,7 @@ sequenceDiagram
 | `detect[]` | detection seeds: `{type: "pattern", regex, signature?, source}` or `{type: "dictionary", values[], source}`. `source: "profiled"` = induced from scanned data; `source: "curated"` = a vetted canonical shape or reference list from the domain pack's `curated_seeds` (profiled wins over curated for the same seed type) | **the authorable core** — one method per seed |
 | `sources[]` | the physical columns/files the term maps to | column-name regex hints |
 | `keys` | per-source `{pk, fk, ref}` facts | relationship context (identity vs join) |
-| `method` | reserved: the deployed method binding this app writes back | reconcile/drift |
+| `method` | reserved: the deployed method binding this app will write back (deploy/drift read PDC live today) | deploy/drift |
 
 ## The contract at a glance
 
@@ -94,7 +97,7 @@ flowchart LR
     DET == "Author" ==> METH
     VOC -. "re-filtered at authoring &mdash;<br/>off-vocabulary tags refused" .-> METH
     METH ==> PDC[("PDC Data<br/>Identification")]
-    MET -. "drift-check (roadmap)" .- PDC
+    MET -. "write-back (roadmap) —<br/>drift-check reads PDC live" .- PDC
 
     classDef seed fill:#FFF7E0,stroke:#C9A227,color:#7A5A00
     classDef vocab fill:#DBEEF3,stroke:#1C7293,color:#0A3D52
