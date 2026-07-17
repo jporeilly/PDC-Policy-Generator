@@ -131,7 +131,13 @@ Write-Host ""
 # --- launch ----------------------------------------------------------------
 $env:HOST = $BindHost
 $env:PORT = "$Port"
-if (-not (Test-Path ..\frontend\dist)) {
+# resolve the app dir through a junction/symlink (the PDC-Demo layout links
+# policy_generator/ flat) so the dist check looks in the real repo root,
+# the same way api.py resolves __file__
+$appItem = Get-Item $PSScriptRoot -Force
+$realAppDir = if ($appItem.LinkType -and $appItem.Target) { [string]$appItem.Target } else { $PSScriptRoot }
+$uiDist = Join-Path (Split-Path $realAppDir -Parent) 'frontend\dist'
+if (-not (Test-Path $uiDist)) {
     Warn "React UI not built (frontend\dist missing) - API + /docs only. Build with: cd ..\frontend; npm install; npm run build"
 }
 Write-Host "  Ready"
