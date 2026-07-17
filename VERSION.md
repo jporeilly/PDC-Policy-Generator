@@ -1,8 +1,13 @@
 # Version
 
-**1.8.0** — 2026-07-17
+**1.8.1** — 2026-07-17
 
-The lifecycle is complete: **Deploy** (programmatic import over PDC's
+Docs-only release: README and INSTALL.md caught up with the shipped 1.8.0
+Deploy + Drift lifecycle (explainer cards, footer PDC session status, the
+35-test count, `drift.py` in the engine listing).
+
+Previously — **1.8.0** (2026-07-17):
+the lifecycle is complete: **Deploy** (programmatic import over PDC's
 discovered import API, post-import term-id re-stamping, optional scoped
 DATA_IDENTIFICATION job) and **Drift-check** (per-method clean / drifted /
 orphaned / missing verdicts against the Registry) ship, both verified live

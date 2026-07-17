@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.8.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+**Version:** 1.8.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
 
 > **1.8.0 — the lifecycle is complete: Deploy + Drift-check ship.** Deploy
 > imports the authored set into PDC programmatically over the same endpoint
@@ -150,7 +150,12 @@ flowchart TB
   expandable **"Under the hood"** panels explain every concept (what each
   summary number means, how a seed becomes a method field-by-field) and show
   the exact calls each step runs — this app's own API, the manual PDC import
-  path, and the deploy-stage import calls.
+  path, and the deploy-stage import calls. Each page opens with a collapsed
+  **explainer card** in the same pattern: the Registry contract with the
+  two-app handoff graphic (Load), the skipped-groups legend (Author), what
+  Deploy actually does (Deploy), and how to read the verdicts (Drift). The
+  sidebar footer shows the live **PDC session status** — a green dot plus
+  the signed-in user once connected.
 - **Reconcile** — connect to PDC (token held in memory only), look every
   concept's term up with the Glossary app's proven three-path lookup, and see
   verified / resolved / mismatch / missing per term. One click stamps the

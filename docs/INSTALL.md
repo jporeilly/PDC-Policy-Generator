@@ -20,9 +20,10 @@ calls in the author stage. All it needs is Python and a Registry file.
 - The web UI running at `http://127.0.0.1:5001` (the Glossary Generator keeps
   port 5000 — both run side by side).
 - The CLI (`python -m policy_generator`) working with zero dependencies.
-- The offline pytest suite passing (20 tests, no PDC, no network).
+- The offline pytest suite passing (35 tests, no PDC, no network).
 - A Registry loaded and a method set authored, ready for
-  **Management → Data Identification → Import** in PDC.
+  **Management → Data Identification → Import** in PDC — or for the app's
+  own **Deploy** stage to import programmatically (Part F).
 
 ## Prerequisites
 
@@ -203,7 +204,7 @@ works identically — nothing in the app assumes a location.)
 
 | Path | What it is |
 | --- | --- |
-| `policy_generator/` | the app: engine (`registry.py`, `author.py`, `pdc.py`), CLI, FastAPI web layer (`api.py`), launchers, `VERSION` |
+| `policy_generator/` | the app: engine (`registry.py`, `author.py`, `pdc.py`, `drift.py`), CLI, FastAPI web layer (`api.py`), launchers, `VERSION` |
 | `frontend/` | the React (Vite) UI — the API serves `frontend/dist`; build once with `npm install && npm run build` (Node 18+) |
 | `tests/` | pytest suite: engine invariants, API flows (PDC mocked), docs-consistency |
 | `docs/CONTRACT.md` | the `classification-registry/1` schema, field by field |

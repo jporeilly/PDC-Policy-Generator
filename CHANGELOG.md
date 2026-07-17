@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.8.1] — 2026-07-17
+
+### Changed — docs sync
+Docs-only release. README's "Learn as you go" now covers the per-page
+collapsed explainer cards (Registry contract on Load, skipped-groups legend
+on Author, what Deploy does, reading the Drift verdicts) and the sidebar
+footer's live PDC session status. INSTALL.md caught up with 1.8.0: the test
+count is 35 (was 20), the engine listing includes `drift.py`, and the
+"what you will have" list notes the Deploy stage as the programmatic
+alternative to the manual UI import. No code changes.
+
 ## [1.8.0] — 2026-07-17
 
 ### Added — Deploy + Drift-check: the lifecycle is complete
