@@ -20,7 +20,7 @@ calls in the author stage. All it needs is Python and a Registry file.
 - The web UI running at `http://127.0.0.1:5001` (the Glossary Generator keeps
   port 5000 — both run side by side).
 - The CLI (`python -m policy_generator`) working with zero dependencies.
-- The offline selftest passing (31 checks, no PDC, no network).
+- The offline pytest suite passing (20 tests, no PDC, no network).
 - A Registry loaded and a method set authored, ready for
   **Management → Data Identification → Import** in PDC.
 
@@ -142,7 +142,7 @@ cd ~/PDC-Demo/PDC-Scenarios && make scenario ID=CSCU
 **Just this app** — this repo's script handles both the first install and
 every later update. It checks the folder, **sparse-clones only the app** —
 `policy_generator/` plus root files — or fast-forward-pulls on re-runs,
-excludes the nested repo from the outer `git status`, and runs the selftest.
+excludes the nested repo from the outer `git status`, and runs the tests.
 Pass a vertical (`CSCU`/`RETAIL`/`HEALTH`/`MFG`) and it also clones/updates
 **PDC-Scenarios** beside the app and sparse-pulls just that vertical's data
 kit and courseware; bare re-runs detect the selected vertical and refresh it:
@@ -189,17 +189,22 @@ works identically — nothing in the app assumes a location.)
 
 | Path | What it is |
 | --- | --- |
-| `policy_generator/` | the app: engine (`registry.py`, `author.py`), CLI, web UI (`app.py` + `templates/`), launchers, `VERSION` |
+| `policy_generator/` | the app: engine (`registry.py`, `author.py`, `pdc.py`), CLI, FastAPI web layer (`api.py`), launchers, `VERSION` |
+| `frontend/` | the React (Vite) UI — the API serves `frontend/dist`; build once with `npm install && npm run build` (Node 18+) |
+| `tests/` | pytest suite: engine invariants, API flows (PDC mocked), docs-consistency |
 | `docs/CONTRACT.md` | the `classification-registry/1` schema, field by field |
-| `docs/CHANGELOG.md` | version history (the app version lives in `policy_generator/VERSION`) |
+| `CHANGELOG.md` | version history at the repo root (the runtime version lives in `policy_generator/VERSION`) |
 | `docs/tools/` | the Word-guide builder that regenerates `docs/lab-setup.docx` (the workshops live in the PDC-Scenarios repo under `courseware/<ID>/Policy/`) |
 | `docs/INSTALL.md` | this guide — the markdown master `docs/lab-setup.docx` is generated from |
 
 ## Part B — Run the web UI
 
-The launcher creates a local virtualenv (`.venv`), installs the (Flask-only)
-dependencies — re-installing only when `requirements.txt` changes — and
-starts the app. Nothing touches your system Python.
+The launcher creates a local virtualenv (`.venv`), installs the dependencies
+(fastapi + uvicorn — the engine itself is stdlib-only), re-installing only when
+`requirements.txt` changes, and starts the app. Nothing touches your system
+Python. If the React UI isn't built yet the launcher says so and the API +
+interactive docs (`/docs`) still work; build the UI once with
+`cd frontend && npm install && npm run build`.
 
 **Linux / macOS:**
 
@@ -237,19 +242,15 @@ python -m policy_generator author path/to/registry.<uuid>.json -o out/ --prefix 
 ## Part D — Verify the install
 
 ```sh
-# from the PDC-Demo folder (the one that CONTAINS policy_generator/),
-# module path with a dot — not a filename:
-python -m policy_generator.selftest
+# from the repo root (the folder that CONTAINS policy_generator/):
+pip install -e ".[dev]"
+pytest
 ```
 
-**Success looks like this:** `31 passed, 0 failed` — the selftest builds a
-fixture Registry in memory and exercises the whole author pipeline offline.
-
-> Common miss: running `python -m selftest.py` from *inside*
-> `policy_generator/` fails with *"attempted relative import with no known
-> parent package"* — `-m` takes a package.module path and must run from the
-> parent folder. If the count reads lower than 31, your clone is behind —
-> re-run `./install-pdc-demo.sh` (it fast-forward-pulls).
+**Success looks like this:** `20 passed` — the suite builds a fixture Registry
+in memory and exercises the whole author pipeline plus the API (reconcile and
+retire run against a mocked PDC — fully offline). It also fails if any version
+marker (VERSION / VERSION.md / README / CHANGELOG) drifts out of agreement.
 
 Then load a real Registry in the UI (drag-drop, or paste its path) and check
 the contract summary: concepts, seeds, resolved term ids, governed tags. The

@@ -6,3 +6,7 @@ out/
 *.log
 .env
 .DS_Store
+node_modules/
+frontend/dist/
+.pytest_cache/
+*.egg-info/

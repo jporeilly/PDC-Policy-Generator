@@ -1,6 +1,10 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.5.4 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](docs/CHANGELOG.md)
+**Version:** 1.7.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+
+> **1.7.0 — React + FastAPI port.** The web layer is now a React (Vite) UI on a
+> FastAPI backend with auto-generated API docs at `/docs`; the deterministic
+> engine and the CLI are unchanged. Tests moved to pytest.
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -158,17 +162,20 @@ flowchart TB
 ## Repository layout
 
 ```text
-policy_generator/       the app: engine (registry.py, author.py), CLI,
-                        web UI (app.py + templates/), launchers, VERSION
+policy_generator/       the app: engine (registry.py, author.py, pdc.py), CLI,
+                        FastAPI web layer (api.py), launchers, VERSION
+frontend/               React (Vite) UI — served by the API from frontend/dist
+tests/                  pytest suite: engine invariants, API flows (PDC mocked),
+                        docs-consistency enforcement
 docs/
   CONTRACT.md           the classification-registry/1 schema, field by field
-  CHANGELOG.md          release history
   INSTALL.md            install & lab-setup guide (markdown master)
   lab-setup.docx        the same guide in the course design, generated
   tools/                builds docs/lab-setup.docx from INSTALL.md
+CHANGELOG.md            release history
 install-pdc-demo.sh     install/update the app inside the lab VM's ~/PDC-Demo
                         checkout + pull the selected vertical's courseware
-                        from PDC-Scenarios (clone or pull + selftest)
+                        from PDC-Scenarios
 ```
 
 ## Install & run
@@ -192,8 +199,11 @@ cd PDC-Policy-Generator/policy_generator
 (In a bootstrapped PDC-Demo the app sits flat at `PDC-Demo/policy_generator`
 — same commands from there.)
 
-The launcher manages a local `.venv` (Flask is the only dependency) and
-defaults to **port 5001** so the Glossary Generator (5000) runs alongside.
+The launcher manages a local `.venv` (fastapi + uvicorn — the engine itself is
+stdlib-only) and defaults to **port 5001** so the Glossary Generator (5000) runs
+alongside. The React UI is served from `frontend/dist`; build it once with
+`cd frontend && npm install && npm run build` (Node 18+). **Interactive API
+docs live at `/docs`** — every endpoint, typed and try-able.
 
 **CLI** (no dependencies at all):
 
@@ -201,7 +211,12 @@ defaults to **port 5001** so the Glossary Generator (5000) runs alongside.
 python -m policy_generator info                    # newest auto-discovered Registry
 python -m policy_generator author -o out/ --prefix CSCU
 python -m policy_generator author path/to/registry.<id>.json --zip methods.zip
-python -m policy_generator.selftest                # offline self-test (20 checks)
+```
+
+**Tests** (offline; PDC calls are mocked):
+
+```bash
+pip install -e ".[dev]" && pytest
 ```
 
 ## Courseware
@@ -219,10 +234,10 @@ this repo's `install-pdc-demo.sh <ID>` does it for you on the VM.
 
 | Document                                                   | What it covers                                                                                                     |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [docs/INSTALL.md](docs/INSTALL.md)                          | Install & lab setup: prerequisites, cloning (workstation or`~/PDC-Demo`), web UI, CLI, selftest, troubleshooting |
+| [docs/INSTALL.md](docs/INSTALL.md)                          | Install & lab setup: prerequisites, cloning (workstation or`~/PDC-Demo`), web UI, CLI, tests, troubleshooting |
 | [docs/lab-setup.docx](docs/lab-setup.docx)                  | The same guide in the course design (generated from INSTALL.md)                                                    |
 | [docs/CONTRACT.md](docs/CONTRACT.md)                        | The`classification-registry/1` schema and the guarantees both apps share                                         |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md)                      | Release history (the app version lives in`policy_generator/VERSION`)                                             |
+| [CHANGELOG.md](CHANGELOG.md) · [VERSION.md](VERSION.md)     | Release history (the runtime version lives in`policy_generator/VERSION`)                                         |
 | [PDC-Scenarios](https://github.com/jporeilly/PDC-Scenarios) | Every vertical's data kit, domain pack and courseware — this app's workshops under`courseware/<ID>/Policy/`     |
 
 The shared lab (PDC VM, demo PostgreSQL + MinIO, scenario loads) is owned by
@@ -232,9 +247,10 @@ authoritative build guide.
 ## Status
 
 The **author** stage works end-to-end from a real Registry — over the web UI
-or the CLI — and is covered by the offline selftest. Reconcile, deploy and
-drift-check are the roadmap, in that order — drift needs deployed methods to
-check, which needs reconcile-and-deploy first.
+or the CLI — and **reconcile** (verify/bind term ids against a live PDC, plus
+scoped retire of the imported set) works over the web UI. Both are covered by
+the offline pytest suite (PDC mocked). Deploy and drift-check are the roadmap,
+in that order — drift needs deployed methods to check.
 
 *All scenario data referenced here (CSCU et al.) is fictional and generated
 for training.*

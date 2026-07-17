@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.7.0] — 2026-07-17
+
+### Changed — React + FastAPI port (architectural)
+
+- **Web layer rebuilt**: Flask + a single 927-line server-rendered template becomes
+  **FastAPI** (`policy_generator/api.py`) + a **React (Vite) frontend** on the same
+  design system as Migration Copilot — guided stepper (Load → Author → Reconcile),
+  four color themes, changelog popup, Settings view. The `/api/*` contract is
+  preserved route-for-route; the engine (`registry` / `author` / `pdc` / `cli`)
+  is unchanged.
+- **Auto-generated API docs** at `/docs` (Swagger), from typed Pydantic models —
+  every endpoint documented, with a back-link to the app.
+- **Tests**: the selftest suites are ported to **pytest** (engine invariants,
+  API flows with mocked PDC, batched reconcile, scoped retire) plus a
+  docs-consistency test that fails the build when version markers drift —
+  which is exactly what had happened (VERSION said 1.6.0, README said 1.5.4).
+- **Packaging**: `pyproject.toml`; requirements move from Flask to
+  fastapi/uvicorn/python-multipart (the engine and CLI remain stdlib-only);
+  launchers (`run.sh` / `run.ps1`) now start uvicorn and warn when the UI
+  bundle isn't built; GitHub Actions CI (pytest + frontend build).
+- **Removed**: `app.py` (Flask), `templates/`, `static/`, `selftest.py` —
+  superseded by the above; history preserved in git.
+- Docs: CHANGELOG moved to the repo root; `VERSION.md` added.
+
 All notable changes to the Policy Generator are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 date-based releases. The app version lives in `policy_generator/VERSION` (the

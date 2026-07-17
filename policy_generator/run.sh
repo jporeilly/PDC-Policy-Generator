@@ -63,7 +63,7 @@ fi
 ok "Python $("$PY" -c 'import platform;print(platform.python_version())') ($PY)"
 
 [ -f requirements.txt ] || die "requirements.txt not found — run this from the app folder."
-[ -f app.py ]          || die "app.py not found — run this from the app folder."
+[ -f api.py ]          || die "api.py not found — run this from the app folder."
 ok "App files present"
 
 # Port availability (best-effort; a busy port means bind will fail)
@@ -106,6 +106,8 @@ echo
 
 # --- launch ----------------------------------------------------------------
 export HOST PORT
+[ -d ../frontend/dist ] || warn "React UI not built (frontend/dist missing) — API + /docs only. Build with: cd ../frontend && npm install && npm run build"
 printf "${B}  Ready${RS}\n"
-printf "  ${TEAL}${B}→ http://%s:%s${RS}   ${DIM}(Ctrl-C to stop)${RS}\n\n" "$HOST" "$PORT"
-exec python app.py
+printf "  ${TEAL}${B}→ http://%s:%s${RS}   ${DIM}(UI · /docs for the API · Ctrl-C to stop)${RS}\n\n" "$HOST" "$PORT"
+cd ..
+exec python -m uvicorn policy_generator.api:app --host "$HOST" --port "$PORT"

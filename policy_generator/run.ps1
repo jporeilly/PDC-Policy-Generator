@@ -77,7 +77,7 @@ if (-not $py) {
 Ok "Python $pyver ($py)"
 
 if (-not (Test-Path requirements.txt)) { Die "requirements.txt not found - run this from the app folder." }
-if (-not (Test-Path app.py))           { Die "app.py not found - run this from the app folder." }
+if (-not (Test-Path api.py))           { Die "api.py not found - run this from the app folder." }
 Ok "App files present"
 
 # Port availability (best-effort)
@@ -131,8 +131,12 @@ Write-Host ""
 # --- launch ----------------------------------------------------------------
 $env:HOST = $BindHost
 $env:PORT = "$Port"
+if (-not (Test-Path ..\frontend\dist)) {
+    Warn "React UI not built (frontend\dist missing) - API + /docs only. Build with: cd ..\frontend; npm install; npm run build"
+}
 Write-Host "  Ready"
 Write-Host "  -> http://${BindHost}:${Port}" -ForegroundColor Cyan -NoNewline
-Write-Host "   (Ctrl-C to stop)" -ForegroundColor DarkGray
+Write-Host "   (UI | /docs for the API | Ctrl-C to stop)" -ForegroundColor DarkGray
 Write-Host ""
-& $venvPy app.py
+Set-Location ..
+& $venvPy -m uvicorn policy_generator.api:app --host $BindHost --port $Port

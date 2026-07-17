@@ -1,3 +1,5 @@
-flask>=3.0
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
 # The author stage is fully offline; reconcile talks to PDC via the
-# stdlib (urllib) — still no other dependencies. Deploy may add requests.
+# stdlib (urllib). The CLI needs none of the above - engine is stdlib-only.

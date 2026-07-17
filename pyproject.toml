@@ -1,0 +1,25 @@
+[project]
+name = "pdc-policy-generator"
+version = "1.7.0"
+description = "Reads the Glossary Generator's Classification Registry and manages PDC Data Identification: author, reconcile, retire."
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+]
+# The engine (registry/author/pdc/cli) is deliberately stdlib-only —
+# the CLI runs with zero dependencies; the web layer needs the three above.
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["policy_generator"]
+
+[tool.setuptools.package-data]
+policy_generator = ["VERSION"]
