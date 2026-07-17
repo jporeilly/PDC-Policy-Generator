@@ -4,12 +4,12 @@
 #
 # PDC-Demo is the Glossary repo's checkout (it holds glossary_generator/ and
 # data_sources/). This script checks that folder exists, then:
-#   - first run:  SPARSE-clones this repo (app only) into a hidden
+#   - first run:  SPARSE-clones this repo (app + frontend) into a hidden
 #                 .pdc-policy-generator/ and links it FLAT at the top level:
 #                 PDC-Demo/policy_generator + README-Policy.md
 #                 (an old PDC-Policy-Generator/ layout is migrated in place)
 #   - thereafter: pulls the latest (fast-forward only)
-# and finishes with the offline selftest, so you know the app is healthy.
+# and finishes with a CLI smoke test, so you know the app is healthy.
 #
 #   ./install-pdc-demo.sh                     # uses ~/PDC-Demo
 #   ./install-pdc-demo.sh /path/to/PDC-Demo   # explicit location
@@ -77,14 +77,16 @@ fi
 if [ -d "$TARGET/.git" ]; then
   printf "  ${DIM}existing clone — pulling…${RS}\n"
   git -C "$TARGET" pull --ff-only || die "pull failed — local changes in $TARGET? Commit/stash them and re-run."
+  # older installs sparse-checked-out policy_generator only — pull in the UI too
+  git -C "$TARGET" sparse-checkout add frontend 2>/dev/null || true
   ok "Updated to $(git -C "$TARGET" rev-parse --short HEAD)"
 elif [ -e "$TARGET" ]; then
   die "$TARGET exists but is not a git clone — move it aside and re-run."
 else
   printf "  ${DIM}first run — sparse clone (app only)…${RS}\n"
   git -C "$DEMO" clone -q --filter=blob:none --sparse "$REPO_URL" "$APP_DIR_NAME"
-  git -C "$TARGET" sparse-checkout set policy_generator
-  ok "Cloned (app only — courseware/docs stay off the VM)"
+  git -C "$TARGET" sparse-checkout set policy_generator frontend
+  ok "Cloned (app + frontend — courseware/docs stay off the VM)"
 fi
 
 # flat view at the top level: policy_generator/ beside glossary_generator/,
@@ -103,14 +105,28 @@ VER="$(cat "$TARGET/policy_generator/VERSION" 2>/dev/null | tr -d '[:space:]' ||
 [ -n "$VER" ] && ok "App version: $VER"
 echo
 
+# --- web UI (React) ----------------------------------------------------------
+printf "${B}  Web UI (React)${RS}\n"
+if command -v npm >/dev/null 2>&1; then
+  printf "  ${DIM}building the frontend (npm install && npm run build)…${RS}\n"
+  if (cd "$TARGET/frontend" && npm install >/dev/null 2>&1 && npm run build >/dev/null 2>&1); then
+    ok "Web UI built (frontend/dist)"
+  else
+    warn "Frontend build failed — build it by hand: cd $TARGET/frontend && npm install && npm run build"
+  fi
+else
+  warn "npm not found — the web UI needs Node 18+ to build; the app will serve API + /docs only"
+fi
+echo
+
 # --- verify ------------------------------------------------------------------
 printf "${B}  Verify${RS}\n"
 PY="$(command -v python3 || command -v python || true)"
 if [ -n "$PY" ]; then
-  if (cd "$TARGET" && "$PY" -m policy_generator.selftest >/dev/null 2>&1); then
-    ok "Offline selftest passed"
+  if (cd "$TARGET" && "$PY" -m policy_generator.cli --help >/dev/null 2>&1); then
+    ok "CLI smoke test passed (python -m policy_generator.cli --help)"
   else
-    warn "Selftest failed — run it for detail: cd $TARGET && $PY -m policy_generator.selftest"
+    warn "CLI smoke test failed — run it for detail: cd $TARGET && $PY -m policy_generator.cli --help"
   fi
 else
   warn "Python 3 not found — install it before running the app"

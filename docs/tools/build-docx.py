@@ -383,7 +383,7 @@ DOCS = [
  ("docs/INSTALL.md", "docs/lab-setup.docx",
   dict(eyebrow1=E1T, eyebrow2="PDC PROCESS  ·  INSTALL & LAB SETUP", label="SETUP GUIDE",
        title="Install & Lab Setup",
-       subtitle="Stand up the Policy Generator — web UI, CLI and selftest — and connect it to the shared PDC lab.",
+       subtitle="Stand up the Policy Generator — web UI, CLI and pytest suite — and connect it to the shared PDC lab.",
        meta=[("Primary role", "Data Steward / Data Developer / IT Administrator"),
              ("Estimated time", "15–20 minutes"),
              ("Dataset", DS)],

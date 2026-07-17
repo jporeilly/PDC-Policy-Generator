@@ -3,7 +3,7 @@
 
   Windows equivalent of run.sh. Creates a local virtualenv (.venv), installs
   dependencies (re-installing only when requirements.txt changes), then launches
-  the app with `python app.py`. Nothing touches your system Python.
+  the app with `uvicorn policy_generator.api:app`. Nothing touches your system Python.
 
     .\run.ps1                    # http://127.0.0.1:5001
     .\run.ps1 -Port 8081         # choose a port
@@ -27,7 +27,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 
-# HOST/PORT: param > existing env > default. app.py reads these from the env.
+# HOST/PORT: param > existing env > default. uvicorn is launched with these.
 if (-not $BindHost) { $BindHost = if ($env:HOST) { $env:HOST } else { '127.0.0.1' } }
 if (-not $Port)     { $Port     = if ($env:PORT) { [int]$env:PORT } else { 5001 } }
 

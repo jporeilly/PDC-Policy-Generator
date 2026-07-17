@@ -1,6 +1,6 @@
 # Policy Generator — install & lab setup
 
-*App 1.4.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
+*App 1.7.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
 
 **Primary role:** Data Steward / Data Developer / IT Administrator
 **Estimated time:** 15–20 minutes (app only — the shared lab is a separate, one-time build)

@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.7.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+**Version:** 1.7.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
 
 > **1.7.0 — React + FastAPI port.** The web layer is now a React (Vite) UI on a
 > FastAPI backend with auto-generated API docs at `/docs`; the deterministic

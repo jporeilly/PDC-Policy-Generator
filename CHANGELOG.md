@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.1] — 2026-07-17
+
+### Fixed — post-port sweep (VM installer, docs, comments)
+
+- **`install-pdc-demo.sh` Verify step** still ran `python -m
+  policy_generator.selftest` — removed in 1.7.0 — so every install warned
+  "Selftest failed". It now runs a dependency-free CLI smoke test
+  (`python3 -m policy_generator.cli --help`) that works on the sparse VM
+  checkout with no venv.
+- **`install-pdc-demo.sh` sparse checkout** pulled only `policy_generator/`,
+  so the React `frontend/` never reached the VM and installs had no web UI.
+  The sparse set now includes `frontend` (existing clones gain it on the next
+  update run), and when `npm` is available the script builds the UI
+  (`npm install && npm run build`); without npm it warns that the web UI
+  needs Node 18+ to build and the app serves API + `/docs` only.
+- Doc/comment drift from the 1.7.0 port: `docs/INSTALL.md` front matter said
+  "App 1.4.x" (now 1.7.x); the `docs/tools/build-docx.py` subtitle said
+  "web UI, CLI and selftest" (now "pytest suite"); `run.ps1` header comments
+  still described the Flask-era `python app.py` launch (it starts
+  `uvicorn policy_generator.api:app`).
+
 ## [1.7.0] — 2026-07-17
 
 ### Changed — React + FastAPI port (architectural)
