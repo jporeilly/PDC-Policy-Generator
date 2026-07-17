@@ -117,6 +117,20 @@ step with checkpoints.*
 
 ## Part A — Get the repository
 
+### Windows 11 host — `C:\PDC-Demo` (the standard topology, one command)
+
+The apps run on the **Windows host**; PDC-Scenarios' bootstrap stands up (or
+updates) the whole `C:\PDC-Demo` checkout — the Glossary app, **this app**
+(sparse: app + frontend, React UI built for you), Catalog Insights, and the
+selected vertical — and installs the vertical's pack into the Glossary app:
+
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.ps1) } CSCU"
+```
+
+Then `cd C:\PDC-Demo\policy_generator; .\run.ps1` → `http://127.0.0.1:5001`.
+The rest of Part A covers the lab VM and manual/dev checkouts:
+
 ```sh
 git clone https://github.com/jporeilly/PDC-Policy-Generator.git
 cd PDC-Policy-Generator
@@ -206,18 +220,18 @@ Python. If the React UI isn't built yet the launcher says so and the API +
 interactive docs (`/docs`) still work; build the UI once with
 `cd frontend && npm install && npm run build`.
 
-**Linux / macOS:**
-
-```sh
-cd policy_generator
-./run.sh                 # → http://127.0.0.1:5001
-```
-
 **Windows (PowerShell):**
 
 ```powershell
 cd policy_generator
 .\run.ps1                # or double-click run.bat
+```
+
+**Linux / macOS (e.g. the lab VM):**
+
+```sh
+cd policy_generator
+./run.sh                 # → http://127.0.0.1:5001
 ```
 
 Options work the same as the Glossary app's launcher: `--port 8081` /

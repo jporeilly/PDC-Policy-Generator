@@ -1,6 +1,6 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.7.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+**Version:** 1.7.2 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
 
 > **1.7.0 — React + FastAPI port.** The web layer is now a React (Vite) UI on a
 > FastAPI backend with auto-generated API docs at `/docs`; the deterministic
@@ -183,17 +183,25 @@ install-pdc-demo.sh     install/update the app inside the lab VM's ~/PDC-Demo
 **Requirements:** Python 3.9+. PDC is reached only when *you* import and run
 the methods — the app itself stays offline. **No LLM.**
 
-On the lab VM, the **whole lab** (both apps + the selected vertical) is one
-bootstrap — PDC-Scenarios' `install-pdc-demo.sh` — and this repo's own
-`install-pdc-demo.sh` updates just this app + vertical. The full guide is
-[docs/INSTALL.md](docs/INSTALL.md) (also as
-[docs/lab-setup.docx](docs/lab-setup.docx)). The short version:
+On the **Windows 11 host** (the standard topology — apps on the host, lab +
+PDC on the VM), the whole suite is one bootstrap into `C:\PDC-Demo`
+(PDC-Scenarios repo; it also builds this app's React UI):
+
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/jporeilly/PDC-Scenarios/main/install-pdc-demo.ps1) } CSCU"
+cd C:\PDC-Demo\policy_generator; .\run.ps1     # → http://127.0.0.1:5001
+```
+
+On the **lab VM**, the same bootstrap is `install-pdc-demo.sh`, and this
+repo's own `install-pdc-demo.sh` updates just this app + vertical. The full
+guide is [docs/INSTALL.md](docs/INSTALL.md) (also as
+[docs/lab-setup.docx](docs/lab-setup.docx)). The manual short version:
 
 ```bash
 git clone https://github.com/jporeilly/PDC-Policy-Generator.git
 cd PDC-Policy-Generator/policy_generator
-./run.sh                         # Linux/macOS → http://127.0.0.1:5001
 .\run.ps1                        # Windows (or double-click run.bat)
+./run.sh                         # Linux/macOS → http://127.0.0.1:5001
 ```
 
 (In a bootstrapped PDC-Demo the app sits flat at `PDC-Demo/policy_generator`

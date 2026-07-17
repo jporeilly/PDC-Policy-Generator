@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.2] — 2026-07-17
+
+### Changed — Windows-first install docs
+Docs-only release. README's Install & run and INSTALL.md Parts A/B now lead
+with the Windows 11 host path (the standard topology: apps on the host via
+PDC-Scenarios' `install-pdc-demo.ps1` into `C:\PDC-Demo`, lab + PDC on the
+Ubuntu VM), with the lab-VM and manual paths second. No code changes.
+
 ## [1.7.1] — 2026-07-17
 
 ### Fixed — post-port sweep (VM installer, docs, comments)
