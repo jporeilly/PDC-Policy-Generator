@@ -36,6 +36,16 @@ class TestVerdicts:
         assert out["counts"]["missing"] == 2
         assert all(r["verdict"] == "missing" for r in out["rows"])
 
+    def test_mapping_only_exempt_from_missing(self, registry):
+        # steward declares Member Number mapping_only: no method is expected,
+        # so an empty catalog reports one missing (State Code), not two —
+        # a method the concept must not have can't be reported absent
+        registry["concepts"][0]["detection_intent"] = "mapping_only"
+        art = _authored(registry)
+        out = drift.evaluate(art, [], registry_allow(registry))
+        assert out["counts"]["missing"] == 1
+        assert {r["name"] for r in out["rows"]} == {"Claims State Code"}
+
     def test_orphaned_when_registry_no_longer_authors_it(self, registry):
         art = _authored(registry)
         live = _live_from(art)

@@ -182,6 +182,16 @@ def author(reg: dict, prefix: str = None) -> dict:
             continue
         term = (c.get("term_name") or "").strip()
         seeds = c.get("detect") or []
+        if _r.is_mapping_only(c):
+            # The steward declared no detectable shape exists (the contract's
+            # optional detection_intent field) — Apply-based governance is the
+            # whole story, so no method is authored even if seeds linger, and
+            # drift-check never expects (or reports missing) a method for it.
+            skipped.append({"term": term, "intent": _r.INTENT_MAPPING_ONLY,
+                            "why": "mapping-only by steward decision — no detectable "
+                                   "shape exists; the Glossary app's Apply step stamps "
+                                   "term, tags and sensitivity on the mapped columns"})
+            continue
         if not seeds:
             skipped.append({"term": term,
                             "why": "no detection seed in the Registry (no induced format or reference list)"})

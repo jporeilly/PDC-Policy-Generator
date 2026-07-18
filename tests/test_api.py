@@ -1,6 +1,8 @@
 """API tests: the FastAPI layer over the engine, PDC calls mocked."""
 
-from tests.conftest import loaded_client
+import json
+
+from tests.conftest import loaded_client, make_registry
 
 
 class TestLoadAndSummary:
@@ -46,6 +48,49 @@ class TestAuthorEndpoints:
         buckets = {s["term"]: s["bucket"] for s in body["skipped"]}
         assert buckets["Claim Notes"] == "rule"       # free text
         assert buckets["Audit Record"] == "structural"
+
+    def test_mapping_only_gets_its_own_bucket(self, api_client, tmp_path):
+        reg = make_registry()
+        reg["concepts"] += [
+            # would hit the amber seed bucket by name — the steward's declared
+            # intent wins and moves it to the calm mapping_only bucket
+            {"term_name": "Broker Email", "tags": ["pii"], "detect": [],
+             "detection_intent": "mapping_only"},
+            {"term_name": "Member Phone", "tags": ["pii"], "detect": []},
+        ]
+        path = tmp_path / "registry.claims.json"
+        path.write_text(json.dumps(reg), encoding="utf-8")
+        client = loaded_client(api_client, path)
+        buckets = {s["term"]: s["bucket"]
+                   for s in client.post("/api/preview", json={}).json()["skipped"]}
+        assert buckets["Broker Email"] == "mapping_only"
+        assert buckets["Member Phone"] == "seed"          # still a real warner
+
+    def test_seed_request_written_beside_registry(self, api_client, tmp_path):
+        reg = make_registry()
+        path = tmp_path / "registry.claims.json"
+        path.write_text(json.dumps(reg), encoding="utf-8")
+        client = loaded_client(api_client, path)
+        res = client.post("/api/seed-request", json={"terms": ["Member Phone", " "]})
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["file"] == "seed-request.json" and body["terms"] == 1
+        data = json.loads((tmp_path / "seed-request.json").read_text(encoding="utf-8"))
+        assert data["registry_file"] == "registry.claims.json"
+        assert data["terms"] == [{"name": "Member Phone", "reason": "no_seed"}]
+        assert "requested_at" in data
+
+    def test_seed_request_needs_a_path_loaded_registry(self, api_client, registry_file):
+        # uploaded Registries have no home directory to write back into
+        with open(registry_file, "rb") as f:
+            api_client.post("/api/load", files={"registry": ("r.json", f, "application/json")})
+        res = api_client.post("/api/seed-request", json={"terms": ["Member Phone"]})
+        assert res.status_code == 400
+        assert "uploaded" in res.json()["detail"]
+
+    def test_seed_request_refuses_an_empty_ask(self, api_client, registry_file):
+        client = loaded_client(api_client, registry_file)
+        assert client.post("/api/seed-request", json={"terms": ["  "]}).status_code == 400
 
     def test_author_downloads_zip(self, api_client, registry_file):
         client = loaded_client(api_client, registry_file)
@@ -113,6 +158,72 @@ class TestReconcileFlow:
 
     def test_pdc_endpoints_require_connect(self, api_client):
         assert api_client.post("/api/pdc/methods", json={}).status_code == 400
+
+
+class TestSessionRefresh:
+    """Keycloak tokens live minutes; a steward's session lives hours. On a
+    401 the backend re-authenticates once with the in-memory credentials and
+    retries, so later calls (methods, retire, deploy, drift) just work."""
+
+    def _connect(self, client, **extra):
+        body = {"base_url": "https://pdc.example",
+                "username": "steward", "password": "good", **extra}
+        res = client.post("/api/pdc/connect", json=body)
+        assert res.status_code == 200, res.text
+        return res.json()
+
+    def _flaky_list(self, monkeypatch, fails=1):
+        """list_methods raises a real TokenExpired `fails` times, then works."""
+        from policy_generator import api as api_mod
+        from policy_generator import pdc as real_pdc
+        real_list = api_mod.pdc_mod.list_methods
+        state = {"fails": fails, "auths": 0}
+
+        def flaky(base, token, prefix=None, verify_tls=False):
+            if state["fails"] > 0:
+                state["fails"] -= 1
+                raise real_pdc.TokenExpired("401 Unauthorized")
+            return real_list(base, token, prefix=prefix, verify_tls=verify_tls)
+
+        def reauth(base, user, pw, version="v3", verify_tls=False, realm="pdc"):
+            assert (user, pw) == ("steward", "good")   # the held credentials
+            state["auths"] += 1
+            return "tok-new"
+
+        monkeypatch.setattr(api_mod.pdc_mod, "list_methods", flaky)
+        monkeypatch.setattr(api_mod.pdc_mod, "auth", reauth)
+        return state
+
+    def test_transparent_reauth_on_401(self, api_client, fake_pdc, monkeypatch):
+        from policy_generator import api as api_mod
+        self._connect(api_client)
+        state = self._flaky_list(monkeypatch)
+
+        body = api_client.post("/api/pdc/methods", json={}).json()
+        assert body["count"] == 4                      # the retry succeeded
+        assert state["auths"] == 1                     # exactly one re-auth
+        # the refreshed token is the session's token now — every card uses it
+        assert api_mod._state["pdc"]["token"] == "tok-new"
+        status = api_client.get("/api/pdc/status").json()
+        assert status["connected"] is True and status["renewable"] is True
+
+    def test_still_401_when_reauth_also_expires(self, api_client, fake_pdc, monkeypatch):
+        self._connect(api_client)
+        self._flaky_list(monkeypatch, fails=99)        # expired stays expired
+        res = api_client.post("/api/pdc/methods", json={})
+        assert res.status_code == 401
+        assert api_client.get("/api/pdc/status").json() == {"connected": False}
+
+    def test_token_only_session_cannot_self_heal(self, api_client, fake_pdc, monkeypatch):
+        # a pasted bearer token carries no credentials to re-auth with
+        res = api_client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc.example", "token": "tok-abc"})
+        assert res.status_code == 200
+        assert api_client.get("/api/pdc/status").json()["renewable"] is False
+        state = self._flaky_list(monkeypatch, fails=99)
+        res = api_client.post("/api/pdc/methods", json={})
+        assert res.status_code == 401
+        assert state["auths"] == 0                     # never even tried
 
 
 class TestDeployFlow:

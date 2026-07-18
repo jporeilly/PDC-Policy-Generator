@@ -46,6 +46,7 @@ app = FastAPI(
 # Single-user local app: the last loaded Registry is the working state.
 # The PDC token is held in memory for this session only — never saved.
 _state = {"reg": None, "name": None,
+          "path": None,           # abs path when loaded by path (None = uploaded)
           "pdc": None,            # {base, version, verify_tls, token}
           "reconcile": None}      # last reconcile rows (for apply)
 
@@ -114,6 +115,10 @@ class DriftRequest(BaseModel):
     prefix: str | None = None
 
 
+class SeedRequestBody(BaseModel):
+    terms: list[str]
+
+
 # --------------------------------------------------------------------------- #
 #  App + registry
 # --------------------------------------------------------------------------- #
@@ -165,16 +170,17 @@ async def api_load(registry: UploadFile | None = None, path: str | None = None) 
                 data = json.load(io.TextIOWrapper(registry.file, encoding="utf-8"))
             except json.JSONDecodeError as e:
                 raise registry_mod.RegistryError(f"not valid JSON ({e})")
-            reg, name = registry_mod.validate_registry(data), registry.filename
+            reg, name, src = registry_mod.validate_registry(data), registry.filename, None
         elif path:
             reg, name = registry_mod.load_registry(path), os.path.basename(path)
+            src = os.path.abspath(path)
         else:
             raise registry_mod.RegistryError("no Registry supplied — upload a file or give a path")
     except registry_mod.RegistryError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except (OSError, ValueError) as e:
         raise HTTPException(status_code=400, detail=f"could not read Registry: {e}")
-    _state["reg"], _state["name"] = reg, name
+    _state["reg"], _state["name"], _state["path"] = reg, name, src
     _state["reconcile"] = None
     return _summary_payload()
 
@@ -256,11 +262,15 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
                 "values": values[:200], "values_count": len(values),
                 "column_hint": _hint(r), "tags": _tags(r), "rule": r}
 
+    # A steward-declared intent beats the name heuristics: mapping_only
+    # concepts land in their own calm bucket, never the amber seed one.
     return {
         "prefix": art["prefix"],
         "patterns": [_pat(p) for p in art["patterns"]],
         "dictionaries": [_dic(d) for d in art["dictionaries"]],
-        "skipped": [dict(s, bucket=_bucket(s["term"])) for s in art["skipped"]],
+        "skipped": [dict(s, bucket=("mapping_only" if s.get("intent") == "mapping_only"
+                                    else _bucket(s["term"])))
+                    for s in art["skipped"]],
     }
 
 
@@ -278,13 +288,41 @@ def api_author(body: PrefixRequest | None = None) -> Response:
     )
 
 
+@app.post("/api/seed-request")
+def api_seed_request(body: SeedRequestBody) -> dict:
+    """Write seed-request.json beside the loaded Registry (the shared
+    registries/ folder in the PDC-Demo layout) listing the governed terms
+    that still need a detection seed — the return channel of the no-seed
+    loop, discoverable by the Glossary app. File schema:
+    {requested_at, registry_file, terms: [{name, reason: "no_seed"}]}."""
+    _require_registry()
+    if not _state.get("path"):
+        raise HTTPException(
+            status_code=400,
+            detail="the Registry was uploaded, not loaded from the shared registries/ "
+                   "folder — load it by path (the discovered list on the Load page) so "
+                   "the seed request can be written beside it for the Glossary app to find")
+    terms = [str(t).strip() for t in body.terms if str(t).strip()]
+    if not terms:
+        raise HTTPException(status_code=400, detail="no terms to request seeds for")
+    try:
+        written = registry_mod.write_seed_request(
+            os.path.dirname(_state["path"]), os.path.basename(_state["path"]), terms)
+    except OSError as e:
+        raise HTTPException(status_code=502, detail=f"could not write the seed request: {e}")
+    return {"written": written, "file": os.path.basename(written), "terms": len(terms)}
+
+
 # --------------------------------------------------------------------------- #
 #  Reconcile — verify/bind term ids against a live PDC
 # --------------------------------------------------------------------------- #
 @app.post("/api/pdc/connect")
 def api_pdc_connect(body: PdcConnectRequest) -> dict:
-    """Authenticate once (Keycloak-first, /auth fallback). The token lives in
-    memory for this session only; the password is never stored."""
+    """Authenticate once (Keycloak-first, /auth fallback). The token — and,
+    for credential logins, the username/password used to mint it — live in
+    process memory for this session only, never on disk: the credentials are
+    what lets every later call transparently re-authenticate when the
+    short-lived Keycloak token expires (see _with_pdc)."""
     base = body.base_url.strip()
     if not base:
         raise HTTPException(status_code=400, detail="PDC base URL is required (e.g. https://192.168.1.200)")
@@ -301,7 +339,12 @@ def api_pdc_connect(body: PdcConnectRequest) -> dict:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"authentication failed: {e}")
     _state["pdc"] = {"base": pdc_mod.clean_base(base), "version": body.version,
-                     "verify_tls": body.verify_tls, "token": token}
+                     "verify_tls": body.verify_tls, "token": token,
+                     # in-memory only, never persisted or echoed back: fuels
+                     # the transparent re-auth when the Keycloak token expires
+                     "username": (body.username or None) if body.password else None,
+                     "password": (body.password or None),
+                     "realm": body.realm}
     who = pdc_mod.decode_jwt(token)
     return {"ok": True, "base": _state["pdc"]["base"], "version": body.version,
             "username": who.get("username"), "roles": who.get("roles", [])[:8],
@@ -313,6 +356,38 @@ def _expired() -> HTTPException:
     return HTTPException(status_code=401, detail="PDC session expired — connect again")
 
 
+def _refresh_token(p: dict) -> bool:
+    """Mint a fresh token with the in-memory credentials (never persisted).
+    False when the session was token-only or the IdP refuses — the caller
+    then surfaces the honest 401."""
+    if not (p.get("username") and p.get("password")):
+        return False
+    try:
+        p["token"] = pdc_mod.auth(p["base"], p["username"], p["password"],
+                                  version=p["version"], verify_tls=p["verify_tls"],
+                                  realm=p.get("realm") or "pdc")
+        return True
+    except Exception:
+        return False
+
+
+def _with_pdc(p: dict, call):
+    """Run `call(token)`; on a 401 re-authenticate once with the held
+    credentials and retry. Keycloak tokens live minutes, a steward's session
+    lives hours — so every PDC-touching endpoint (methods list, retire,
+    reconcile, deploy, drift) rides through expiry instead of dying with
+    'session expired' while the header still shows connected."""
+    try:
+        return call(p["token"])
+    except pdc_mod.TokenExpired:
+        if not _refresh_token(p):
+            raise _expired()
+        try:
+            return call(p["token"])
+        except pdc_mod.TokenExpired:
+            raise _expired()
+
+
 @app.post("/api/pdc/methods")
 def api_pdc_methods(body: PrefixRequest | None = None) -> dict:
     """List the custom Data Identification methods in PDC, scoped to a name
@@ -320,10 +395,10 @@ def api_pdc_methods(body: PrefixRequest | None = None) -> dict:
     p = _require_pdc()
     prefix = ((body.prefix if body else None) or "").strip() or None
     try:
-        rows = pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
-                                    verify_tls=p["verify_tls"])
-    except pdc_mod.TokenExpired:
-        raise _expired()
+        rows = _with_pdc(p, lambda tok: pdc_mod.list_methods(
+            p["base"], tok, prefix=prefix, verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"method list failed: {e}")
     return {"methods": rows, "count": len(rows), "prefix": prefix}
@@ -340,10 +415,10 @@ def api_pdc_retire(body: RetireRequest) -> dict:
         raise HTTPException(status_code=400,
                             detail="a name prefix is required — retire is always scoped")
     try:
-        rows = pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
-                                    verify_tls=p["verify_tls"])
-    except pdc_mod.TokenExpired:
-        raise _expired()
+        rows = _with_pdc(p, lambda tok: pdc_mod.list_methods(
+            p["base"], tok, prefix=prefix, verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"method list failed: {e}")
 
@@ -357,11 +432,11 @@ def api_pdc_retire(body: RetireRequest) -> dict:
         if want and m["_id"] not in want:
             continue
         try:
-            rid = pdc_mod.remove_method(p["base"], p["token"], m["kind"], m["_id"],
-                                        verify_tls=p["verify_tls"])
+            rid = _with_pdc(p, lambda tok, m=m: pdc_mod.remove_method(
+                p["base"], tok, m["kind"], m["_id"], verify_tls=p["verify_tls"]))
             results.append({**m, "removed": bool(rid), "recordId": rid})
-        except pdc_mod.TokenExpired:
-            raise _expired()
+        except HTTPException:
+            raise
         except Exception as e:
             results.append({**m, "removed": False, "error": str(e)[:300]})
     removed = sum(1 for r in results if r.get("removed"))
@@ -381,13 +456,15 @@ def api_pdc_status() -> dict:
         return {"connected": False}
     who = pdc_mod.decode_jwt(p["token"])
     return {"connected": True, "base": p["base"],
-            "username": who.get("username"), "expires_in": who.get("expires_in")}
+            "username": who.get("username"), "expires_in": who.get("expires_in"),
+            # credential sessions self-heal: expiry re-auths transparently
+            "renewable": bool(p.get("username") and p.get("password"))}
 
 
 def _live_index(p, prefix):
     """Non-built-in methods carrying the prefix, keyed by (kind, name)."""
-    rows = pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
-                                verify_tls=p["verify_tls"])
+    rows = _with_pdc(p, lambda tok: pdc_mod.list_methods(
+        p["base"], tok, prefix=prefix, verify_tls=p["verify_tls"]))
     return {(m["kind"], m["name"]): m for m in rows if not m.get("builtIn")}
 
 
@@ -416,8 +493,8 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
 
     try:
         live = _live_index(p, prefix)
-    except pdc_mod.TokenExpired:
-        raise _expired()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"method list failed: {e}")
 
@@ -434,32 +511,32 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
     workers = []
     try:
         if art["patterns"]:
-            w = pdc_mod.upload_import(p["base"], p["token"], "DataPattern",
-                                      "patterns-import.zip",
-                                      author_mod.patterns_zip_bytes(art),
-                                      verify_tls=p["verify_tls"])
-            st = pdc_mod.wait_worker(p["base"], p["token"], w.get("_id"),
-                                     verify_tls=p["verify_tls"], timeout=body.wait_seconds)
+            w = _with_pdc(p, lambda tok: pdc_mod.upload_import(
+                p["base"], tok, "DataPattern", "patterns-import.zip",
+                author_mod.patterns_zip_bytes(art), verify_tls=p["verify_tls"]))
+            st = _with_pdc(p, lambda tok: pdc_mod.wait_worker(
+                p["base"], tok, w.get("_id"),
+                verify_tls=p["verify_tls"], timeout=body.wait_seconds))
             workers.append({"kind": "DataPattern", "worker_id": w.get("_id"),
                             "workerName": w.get("workerName"), "status": st.get("status")})
         if art["dictionaries"]:
-            w = pdc_mod.upload_import(p["base"], p["token"], "Dictionary",
-                                      "dictionaries-import.zip",
-                                      author_mod.dictionaries_zip_bytes(art),
-                                      verify_tls=p["verify_tls"])
-            st = pdc_mod.wait_worker(p["base"], p["token"], w.get("_id"),
-                                     verify_tls=p["verify_tls"], timeout=body.wait_seconds)
+            w = _with_pdc(p, lambda tok: pdc_mod.upload_import(
+                p["base"], tok, "Dictionary", "dictionaries-import.zip",
+                author_mod.dictionaries_zip_bytes(art), verify_tls=p["verify_tls"]))
+            st = _with_pdc(p, lambda tok: pdc_mod.wait_worker(
+                p["base"], tok, w.get("_id"),
+                verify_tls=p["verify_tls"], timeout=body.wait_seconds))
             workers.append({"kind": "Dictionary", "worker_id": w.get("_id"),
                             "workerName": w.get("workerName"), "status": st.get("status")})
-    except pdc_mod.TokenExpired:
-        raise _expired()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"import upload failed: {e}")
 
     try:
         live = _live_index(p, prefix)
-    except pdc_mod.TokenExpired:
-        raise _expired()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"post-import verify failed: {e}")
 
@@ -471,11 +548,11 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
                "_id": m and m.get("_id"), "bound": None}
         if m and body.bind and e.get("term_id"):
             try:
-                row["bound"] = pdc_mod.bind_business_term(
-                    p["base"], p["token"], e["kind"], m["_id"],
-                    e["term"], e["term_id"], verify_tls=p["verify_tls"])
-            except pdc_mod.TokenExpired:
-                raise _expired()
+                row["bound"] = _with_pdc(p, lambda tok, e=e, m=m: pdc_mod.bind_business_term(
+                    p["base"], tok, e["kind"], m["_id"],
+                    e["term"], e["term_id"], verify_tls=p["verify_tls"]))
+            except HTTPException:
+                raise
             except Exception as ex:
                 row["bound"] = False
                 row["error"] = str(ex)[:300]
@@ -502,16 +579,16 @@ def api_pdc_identify(body: IdentifyRequest) -> dict:
                             detail="an entity-id scope is required — identification "
                                    "jobs are never catalog-wide from here")
     try:
-        methods = [m for m in pdc_mod.list_methods(p["base"], p["token"], prefix=prefix,
-                                                   verify_tls=p["verify_tls"])
+        methods = [m for m in _with_pdc(p, lambda tok: pdc_mod.list_methods(
+                       p["base"], tok, prefix=prefix, verify_tls=p["verify_tls"]))
                    if not m.get("builtIn")]
-        job_id = pdc_mod.start_identification_job(
-            p["base"], p["token"], body.scope,
+        job_id = _with_pdc(p, lambda tok: pdc_mod.start_identification_job(
+            p["base"], tok, body.scope,
             [m["_id"] for m in methods if m["kind"] == "Dictionary"],
             [m["_id"] for m in methods if m["kind"] == "DataPattern"],
-            verify_tls=p["verify_tls"])
-    except pdc_mod.TokenExpired:
-        raise _expired()
+            verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"identification job failed: {e}")
     return {"job_id": job_id, "methods": len(methods), "scope": len(body.scope)}
@@ -535,12 +612,12 @@ def api_pdc_drift(body: DriftRequest | None = None) -> dict:
         live = _live_index(p, prefix)
         details = []
         for (kind, _name), m in live.items():
-            d = pdc_mod.get_method(p["base"], p["token"], kind, m["_id"],
-                                   verify_tls=p["verify_tls"])
+            d = _with_pdc(p, lambda tok, kind=kind, m=m: pdc_mod.get_method(
+                p["base"], tok, kind, m["_id"], verify_tls=p["verify_tls"]))
             d["kind"] = kind
             details.append(d)
-    except pdc_mod.TokenExpired:
-        raise _expired()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"drift read failed: {e}")
     out = drift_mod.evaluate(art, details, registry_mod.governed_tags(_state["reg"]))
@@ -591,10 +668,10 @@ def api_reconcile(body: ReconcileRequest | None = None) -> dict:
     chunk = concepts if limit is None else concepts[offset:offset + max(1, min(limit, 50))]
     names = [c.get("term_name") for c in chunk if c.get("term_name")]
     try:
-        found = pdc_mod.resolve_terms(p["base"], p["token"], names,
-                                      version=p["version"], verify_tls=p["verify_tls"])
-    except pdc_mod.TokenExpired:
-        raise _expired()
+        found = _with_pdc(p, lambda tok: pdc_mod.resolve_terms(
+            p["base"], tok, names, version=p["version"], verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"PDC lookup failed: {e}")
     rows = _reconcile_rows(chunk, found)

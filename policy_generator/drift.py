@@ -18,6 +18,12 @@ Verdicts:
   orphaned — a method carries the app's prefix but the Registry no longer
              authors it (a stale deploy, or hand-authored under the prefix)
 
+Concepts the steward declared mapping_only (the contract's optional
+detection_intent field, 1.9.0) are exempt from `missing` verdicts by
+construction: author.author skips them, so they never enter the expected
+set — a method they are not supposed to have can't be reported absent.
+(A deployed method for one would still surface as `orphaned`, correctly.)
+
 Dictionary VALUES are not readable over PDC's GraphQL (only the server-side
 rowCount survives export), so the value-list check is a row-count check —
 an honest proxy, called out as such in the check label.

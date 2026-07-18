@@ -4,6 +4,8 @@ import { SummaryCard } from './LoadPage.jsx'
 const BUCKETS = {
   seed: { label: 'Needs a detection seed', cls: 'warning', icon: '⚠',
           hint: 'Identifiable data (SSN, email, phone…) whose scan produced no seed — re-scan or add one glossary-side.' },
+  mapping_only: { label: 'Mapping-only by steward decision', cls: 'neutral', icon: '·',
+                  hint: 'The Registry carries detection_intent: mapping_only — the steward decided no detectable shape exists; the Apply step governs these.' },
   structural: { label: 'Structural — correctly method-less', cls: 'neutral', icon: '·',
                 hint: 'Record/report/summary concepts describe containers, not values; no method should exist.' },
   rule: { label: 'Free text — needs a vocabulary rule', cls: 'accent', icon: 'ℹ',
@@ -29,7 +31,17 @@ function SkippedGroupsExplainer() {
           <b>⚠ Needs a detection seed</b> — identifiable data (SSN, email, phone…) whose
           scan produced no seed. Fix it glossary-side: re-scan, or add a curated seed to
           the domain pack, then re-export the Registry. The only amber bucket — the only
-          one that wants action here.
+          one that wants action here. <b>⇪ Export seed request</b> writes
+          <code> seed-request.json</code> beside the loaded Registry, so the Glossary
+          steward sees exactly which terms still need one — the loop closes without
+          re-typing anything.
+        </li>
+        <li>
+          <b>· Mapping-only by steward decision</b> — the Registry's optional
+          <code> detection_intent: "mapping_only"</code> field records an explicit
+          steward call: no detectable shape exists, so the Apply step's term, tags and
+          sensitivity stamps on the mapped columns are the whole governance story.
+          Not a warning — the question was asked and answered.
         </li>
         <li>
           <b>· Structural — correctly method-less</b> — record/report/summary concepts
@@ -54,6 +66,8 @@ export default function AuthorPage({ summary }) {
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [seedBusy, setSeedBusy] = useState(false)
+  const [seedMsg, setSeedMsg] = useState(null)   // {ok, text}
 
   const runPreview = useCallback(async (p) => {
     setBusy(true)
@@ -95,6 +109,30 @@ export default function AuthorPage({ summary }) {
   const skippedByBucket = {}
   for (const s of preview?.skipped ?? []) {
     (skippedByBucket[s.bucket] ??= []).push(s)
+  }
+
+  // The no-seed loop's return channel: write seed-request.json beside the
+  // loaded Registry so the Glossary app can discover which terms still
+  // need a detection seed.
+  async function exportSeedRequest() {
+    const terms = (skippedByBucket.seed ?? []).map((s) => s.term)
+    setSeedBusy(true)
+    setSeedMsg(null)
+    try {
+      const res = await fetch('/api/seed-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terms }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.detail || res.statusText)
+      setSeedMsg({ ok: true,
+                   text: `✓ ${body.file} written beside the Registry (${body.terms} term${body.terms === 1 ? '' : 's'}) — the Glossary app can pick it up` })
+    } catch (err) {
+      setSeedMsg({ ok: false, text: err.message })
+    } finally {
+      setSeedBusy(false)
+    }
   }
 
   return (
@@ -193,8 +231,27 @@ export default function AuthorPage({ summary }) {
                         <span className="notes">{b.hint}</span>
                       </div>
                       <ul className="bucket-list">
-                        {items.map((s) => <li key={s.term}>{s.term} <span className="notes">— {s.why}</span></li>)}
+                        {items.map((s) => (
+                          <li key={s.term}>
+                            {s.term} <span className="notes">— {s.why}</span>
+                            {key === 'seed' && (
+                              <span className="notes"> · will be listed in seed-request.json</span>
+                            )}
+                          </li>
+                        ))}
                       </ul>
+                      {key === 'seed' && (
+                        <div className="actions" style={{ marginTop: '.5rem' }}>
+                          <button className="ghost" onClick={exportSeedRequest} disabled={seedBusy}>
+                            {seedBusy ? 'Writing…' : '⇪ Export seed request'}
+                          </button>
+                          {seedMsg && (
+                            <span className={seedMsg.ok ? 'ok' : 'warn'} style={{ fontSize: '.84rem' }}>
+                              {seedMsg.text}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

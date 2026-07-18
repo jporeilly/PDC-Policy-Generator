@@ -50,10 +50,12 @@ def api_client(registry_file):
 
     from policy_generator import api as api_mod
 
-    api_mod._state.update({"reg": None, "name": None, "pdc": None, "reconcile": None})
+    api_mod._state.update({"reg": None, "name": None, "path": None,
+                           "pdc": None, "reconcile": None})
     client = TestClient(api_mod.app)
     yield client
-    api_mod._state.update({"reg": None, "name": None, "pdc": None, "reconcile": None})
+    api_mod._state.update({"reg": None, "name": None, "path": None,
+                           "pdc": None, "reconcile": None})
 
 
 def loaded_client(api_client, registry_file):

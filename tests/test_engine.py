@@ -29,6 +29,34 @@ class TestRegistry:
         assert s["governed_tags"] == 3
         assert len(registry.unresolved_terms(reg)) == 3
 
+    def test_detection_intent_is_optional_and_normalised(self):
+        # absent / empty = unknown (pre-1.9 Registries read exactly as before)
+        assert registry.detection_intent({}) is None
+        assert registry.detection_intent({"detection_intent": ""}) is None
+        assert registry.detection_intent({"detection_intent": " Mapping_Only "}) == "mapping_only"
+        assert registry.is_mapping_only({"detection_intent": "mapping_only"})
+        assert not registry.is_mapping_only({"detection_intent": "seeded"})
+        assert not registry.is_mapping_only({})
+
+    def test_mapping_only_is_never_authorable(self):
+        from tests.conftest import make_registry
+        reg = make_registry()
+        # even a concept with lingering seeds drops out of the authorable set
+        reg["concepts"][0]["detection_intent"] = "mapping_only"
+        assert {c["term_name"] for c in registry.seeded_concepts(reg)} == {"State Code", "Audit Record"}
+        assert registry.summary(reg)["seeded"] == 2
+
+    def test_write_seed_request_schema(self, tmp_path):
+        path = registry.write_seed_request(str(tmp_path), "registry.claims.json",
+                                           ["Member Phone", "  ", "Broker Email"])
+        import json as _json
+        data = _json.loads((tmp_path / "seed-request.json").read_text(encoding="utf-8"))
+        assert path.endswith("seed-request.json")
+        assert data["registry_file"] == "registry.claims.json"
+        assert data["terms"] == [{"name": "Member Phone", "reason": "no_seed"},
+                                 {"name": "Broker Email", "reason": "no_seed"}]
+        assert data["requested_at"].endswith("Z")
+
 
 class TestAuthor:
     def test_artifacts_and_skips(self, registry):
@@ -40,6 +68,15 @@ class TestAuthor:
         assert "Claim Notes" in skipped            # no seeds
         assert "Audit Record" in skipped           # tags fail the allow-list
         assert "governed tags" in skipped["Audit Record"]
+
+    def test_mapping_only_skips_authoring_even_with_seeds(self, registry):
+        # the steward's declared intent beats a lingering seed
+        registry["concepts"][0]["detection_intent"] = "mapping_only"
+        art = author.author(registry)
+        assert art["patterns"] == []                       # the pattern seed is ignored
+        skipped = {s["term"]: s for s in art["skipped"]}
+        assert skipped["Member Number"]["intent"] == "mapping_only"
+        assert "steward decision" in skipped["Member Number"]["why"]
 
     def test_pattern_rule_shape(self, registry):
         (p,) = author.author(registry)["patterns"]

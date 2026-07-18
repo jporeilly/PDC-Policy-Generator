@@ -12,8 +12,18 @@ from __future__ import annotations
 import glob
 import json
 import os
+import time
 
 SCHEMA = "classification-registry/1"
+
+# The optional per-concept detection_intent values (1.9.0, backward
+# compatible — absent means unknown, exactly how pre-1.9 Registries read):
+#   "seeded"       — detection seeds exist (the normal authorable case)
+#   "mapping_only" — the steward explicitly decided no detectable shape
+#                    exists; the Glossary app's Apply step is the whole
+#                    governance story, so no method should ever exist
+INTENT_SEEDED = "seeded"
+INTENT_MAPPING_ONLY = "mapping_only"
 
 
 class RegistryError(ValueError):
@@ -79,10 +89,26 @@ def governed_tags(reg: dict) -> set:
     return {str(t).strip().lower() for t in (vocab.get("allow_list") or []) if str(t).strip()}
 
 
+def detection_intent(concept) -> str | None:
+    """The steward's declared detection intent for a concept — the OPTIONAL
+    contract field added in 1.9.0. Returns 'seeded', 'mapping_only', or None
+    when the Registry predates the field / the steward has not decided."""
+    v = str(((concept or {}) if isinstance(concept, dict) else {})
+            .get("detection_intent") or "").strip().lower()
+    return v or None
+
+
+def is_mapping_only(concept) -> bool:
+    """True when the steward declared no detectable shape exists for this
+    concept — Apply-based governance only, so no method should ever exist."""
+    return detection_intent(concept) == INTENT_MAPPING_ONLY
+
+
 def seeded_concepts(reg: dict):
-    """Concepts that carry at least one detection seed — the authorable set."""
+    """Concepts that carry at least one detection seed — the authorable set.
+    A mapping_only concept is never authorable, even if seeds linger."""
     return [c for c in reg.get("concepts", [])
-            if isinstance(c, dict) and (c.get("detect") or [])]
+            if isinstance(c, dict) and (c.get("detect") or []) and not is_mapping_only(c)]
 
 
 def unresolved_terms(reg: dict) -> list:
@@ -90,6 +116,25 @@ def unresolved_terms(reg: dict) -> list:
     Resolve not run) — deploy binds by name only for these, which is weaker."""
     return [c.get("term_name") for c in reg.get("concepts", [])
             if isinstance(c, dict) and not c.get("term_id")]
+
+
+def write_seed_request(dir_path: str, registry_file: str, terms: list) -> str:
+    """Write seed-request.json into the directory the Registry was loaded
+    from (the shared registries/ folder in the PDC-Demo layout) so the
+    Glossary app can discover which governed terms still need a detection
+    seed — the return channel of the no-seed loop. Overwrites any previous
+    request (the newest ask is the only one that matters). Returns the path."""
+    payload = {
+        "requested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "registry_file": registry_file,
+        "terms": [{"name": str(t).strip(), "reason": "no_seed"}
+                  for t in terms if str(t).strip()],
+    }
+    path = os.path.join(dir_path, "seed-request.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+        f.write("\n")
+    return path
 
 
 def summary(reg: dict) -> dict:

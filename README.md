@@ -1,14 +1,16 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.8.1 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+**Version:** 1.9.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
 
-> **1.8.0 — the lifecycle is complete: Deploy + Drift-check ship.** Deploy
-> imports the authored set into PDC programmatically over the same endpoint
-> PDC 11's own UI zip-upload uses (discovered live: multipart
-> `POST /api/importWorkerFiles`), verifies every method landed, and re-stamps
-> the reconciled term ids. Drift-check compares every deployed method against
-> the Registry — tags, term bindings, regexes, dictionary counts — with a
-> clean / drifted / orphaned / missing verdict per method.
+> **1.9.0 — the no-seed loop closes.** The contract gains an optional
+> per-concept `detection_intent` field: `"mapping_only"` records the
+> steward's explicit call that no detectable shape exists, moving the
+> concept out of the Author page's amber "needs a seed" bucket for good
+> (and exempting it from drift's `missing` verdict). For the terms still
+> waiting, **⇪ Export seed request** writes `seed-request.json` beside the
+> loaded Registry so the Glossary app can discover the ask — both directions
+> of the loop are files in the shared `registries/` folder, no runtime
+> coupling.
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it

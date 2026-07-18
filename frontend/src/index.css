@@ -216,6 +216,15 @@ tbody tr { border-bottom: 4px solid var(--surface-1); }
 tr td:first-child { border-radius: 8px 0 0 8px; }
 tr td:last-child { border-radius: 0 8px 8px 0; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.num { text-align: right; }
+/* Discovered-registries table (Load page) — fixed column plan, the same
+   colgroup treatment as the Glossary app's Home table, so the numeric
+   Concepts value sits directly under its right-aligned header. */
+.reg-table { table-layout: fixed; }
+.reg-table col.c-file { width: 42%; }
+.reg-table col.c-gloss { width: 22%; }
+.reg-table col.c-concepts { width: 6.5rem; }
+.reg-table col.c-mod { width: 9.5rem; }
 .notes { color: var(--text-muted); font-size: .84rem; }
 .cell-clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-link { cursor: pointer; }
@@ -226,13 +235,18 @@ code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: .84e
 /* ---------- badges ---------- */
 .badge {
   display: inline-flex; align-items: center; gap: .3rem;
-  padding: .1rem .6rem; border-radius: 99px; font-size: .78rem; font-weight: 650;
+  padding: .14rem .6rem; border-radius: 99px; font-size: .78rem; font-weight: 650;
+  white-space: nowrap; line-height: 1.45;
 }
 .badge.good { color: var(--status-good); background: rgba(12, 163, 12, 0.14); }
 .badge.warning { color: var(--status-warning); background: rgba(250, 178, 25, 0.13); }
 .badge.serious { color: var(--status-serious); background: rgba(236, 131, 90, 0.14); }
 .badge.neutral { color: var(--text-secondary); background: var(--surface-2); }
 .badge.accent { color: var(--accent); background: rgba(57, 135, 229, 0.14); }
+
+/* Reconcile summary chips: their own flex row with clear air below, so the
+   results table's scroll area never crowds/clips right under the badges. */
+.chips-row { display: flex; flex-wrap: wrap; gap: .5rem .9rem; margin: .8rem 0 1rem; }
 
 /* ---------- progress ---------- */
 .progress-track { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; margin: .6rem 0; }

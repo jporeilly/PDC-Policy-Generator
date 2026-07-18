@@ -67,7 +67,11 @@ export default function LoadPage({ summary, onLoaded }) {
           <>
             <h3 className="subhead">Discovered in the co-located Glossary checkout</h3>
             <div className="table-scroll">
-              <table>
+              <table className="reg-table">
+                <colgroup>
+                  <col className="c-file" /><col className="c-gloss" />
+                  <col className="c-concepts" /><col className="c-mod" />
+                </colgroup>
                 <thead>
                   <tr><th>File</th><th>Glossary</th><th className="num">Concepts</th><th>Modified</th></tr>
                 </thead>

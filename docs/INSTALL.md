@@ -1,6 +1,6 @@
 # Policy Generator — install & lab setup
 
-*App 1.8.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
+*App 1.9.x · targets Pentaho Data Catalog 11.0.0 (public API v3)*
 
 **Primary role:** Data Steward / Data Developer / IT Administrator
 **Estimated time:** 15–20 minutes (app only — the shared lab is a separate, one-time build)
@@ -20,7 +20,7 @@ calls in the author stage. All it needs is Python and a Registry file.
 - The web UI running at `http://127.0.0.1:5001` (the Glossary Generator keeps
   port 5000 — both run side by side).
 - The CLI (`python -m policy_generator`) working with zero dependencies.
-- The offline pytest suite passing (35 tests, no PDC, no network).
+- The offline pytest suite passing (47 tests, no PDC, no network).
 - A Registry loaded and a method set authored, ready for
   **Management → Data Identification → Import** in PDC — or for the app's
   own **Deploy** stage to import programmatically (Part F).

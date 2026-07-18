@@ -1,5 +1,65 @@
 # Changelog
 
+## [1.9.0] — 2026-07-18
+
+### Added — the no-seed loop closes
+
+A seedless, identifiable concept was the one state the contract couldn't
+settle: either a seed is still missing, or no detectable shape exists and
+the steward should say so. Both directions are now files in the shared
+`registries/` folder — no runtime coupling between the apps.
+
+- **Contract: optional `detection_intent` per concept**
+  (`classification-registry/1`, backward compatible — absent = unknown).
+  `"seeded"` = seeds exist; `"mapping_only"` = the steward decided no
+  detectable shape exists, so the Glossary app's Apply step is the whole
+  governance story. Documented in docs/CONTRACT.md (field table + a new
+  "The no-seed loop" section).
+- **Author page: "Mapping-only by steward decision" bucket.** Concepts with
+  `detection_intent: "mapping_only"` leave the amber "Needs a detection
+  seed" warning for a calm, informational bucket (steward intent beats the
+  name heuristics). They are never authored — even if seeds linger — and
+  `registry.seeded_concepts` no longer counts them as authorable.
+- **⇪ Export seed request** (`POST /api/seed-request`). For the terms still
+  in the amber bucket, one click writes `seed-request.json`
+  (`{requested_at, registry_file, terms: [{name, reason: "no_seed"}]}`)
+  into the same directory the loaded Registry came from, so the Glossary
+  app can discover the ask. Requires a path-loaded Registry (an uploaded
+  file has no home directory to write back into). Engine stays stdlib-only
+  (`registry.write_seed_request`).
+- **Drift: mapping_only is exempt from `missing` verdicts** by
+  construction — author skips the concept, so drift never expects a method
+  it must not have. A deployed method for one still surfaces as `orphaned`.
+
+### Fixed — PDC session lifecycle: transparent re-auth on 401
+
+Keycloak tokens live minutes; a steward's session lives hours. "List
+methods" (and any later PDC call) could report "PDC session expired —
+connect again" while the header still showed ✓ connected. Every
+PDC-touching endpoint (methods list, retire, reconcile, deploy, drift,
+identify) now rides through expiry: on a 401 the backend re-authenticates
+once with the connect-time credentials — held in process memory only,
+never persisted, never echoed back — swaps in the fresh token for the whole
+session, and retries. Token-only sessions (pasted bearer) can't self-heal
+and still get the honest 401; `/api/pdc/status` reports `renewable` so the
+UI can tell the two apart.
+
+### Fixed — layout
+- Load page, discovered-registries table: fixed column plan (colgroup, the
+  Glossary Home treatment) with the numeric Concepts value right-aligned
+  directly under its right-aligned header.
+- "✓ by id" / "⚠ by name" badges no longer squash/wrap in narrow cells
+  (`.badge` gets `white-space: nowrap` + slightly more padding).
+- Reconcile page: the verified/resolved/mismatch/missing summary chips get
+  their own row with clear air below, so the results table's scroll area no
+  longer crowds right under the badges.
+
+### Tests
+47 offline tests (was 35): detection_intent normalisation, mapping_only
+authorable-set/author-skip/drift-exemption, seed-request schema + endpoint
+(path-loaded, uploaded, empty ask), preview bucketing, and the re-auth
+retry path (401-then-200, credential vs token-only sessions).
+
 ## [1.8.1] — 2026-07-17
 
 ### Changed — docs sync

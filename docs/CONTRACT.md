@@ -67,6 +67,7 @@ sequenceDiagram
 | `category` | glossary category | rule `category` grouping |
 | `definition` | the steward's reviewed definition | context in review output |
 | `detect[]` | detection seeds: `{type: "pattern", regex, signature?, source}` or `{type: "dictionary", values[], source}`. `source: "profiled"` = induced from scanned data; `source: "curated"` = a vetted canonical shape or reference list from the domain pack's `curated_seeds` (profiled wins over curated for the same seed type) | **the authorable core** — one method per seed |
+| `detection_intent` | OPTIONAL (1.9.0, backward compatible — absent = unknown): the steward's declared intent. `"seeded"` = seeds exist (the normal authorable case); `"mapping_only"` = the steward decided **no detectable shape exists** — the Glossary app's Apply step (term, tags, sensitivity stamped on the mapped columns) is the whole governance story | mapping_only concepts are never authored, drop out of the "needs a seed" warning into their own calm bucket, and are exempt from drift's `missing` verdict (a method they must not have can't be absent) |
 | `sources[]` | the physical columns/files the term maps to | column-name regex hints |
 | `keys` | per-source `{pk, fk, ref}` facts | relationship context (identity vs join) |
 | `method` | reserved: the deployed method binding this app will write back (deploy/drift read PDC live today) | deploy/drift |
@@ -110,6 +111,33 @@ flowchart LR
     class METH method
     class PDC pdc
 ```
+
+## The no-seed loop (1.9.0)
+
+A seedless, identifiable concept (SSN, email, phone…) is the one state the
+contract can't settle by itself: either a seed is still missing (fix it
+glossary-side), or no detectable shape exists and the steward should say so.
+Two channels close that loop, both file-based, both in the shared
+`registries/` folder — no runtime coupling between the apps:
+
+- **Forward — `detection_intent` (Glossary → Policy)**: the steward records
+  the decision per concept. `"mapping_only"` moves the concept out of the
+  Policy app's amber "needs a seed" bucket for good; absent means the
+  question is still open.
+- **Return — `seed-request.json` (Policy → Glossary)**: the Policy app's
+  Author page exports the still-open terms into the same directory the
+  loaded Registry came from, so the Glossary app can discover the ask:
+
+  ```json
+  {
+    "requested_at": "2026-07-18T12:00:00Z",
+    "registry_file": "registry.<glossary-uuid>.json",
+    "terms": [{ "name": "Member Phone", "reason": "no_seed" }]
+  }
+  ```
+
+  One file per registries/ folder; each export overwrites the previous one
+  (the newest ask is the only one that matters).
 
 ## Guarantees the contract gives
 

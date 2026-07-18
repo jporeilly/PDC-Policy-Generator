@@ -184,12 +184,10 @@ export default function ReconcilePage({ summary, onSummary, pdc, onPdc }) {
           </div>
         )}
         {counts && (
-          <p className="summary">
+          <div className="chips-row">
             {Object.entries(STATUS).map(([k, s]) =>
-              <span key={k} title={s.tip} style={{ marginRight: '1rem' }}>
-                <span className={`badge ${s.cls}`}>{s.icon} {k} {counts[k]}</span>
-              </span>)}
-          </p>
+              <span key={k} className={`badge ${s.cls}`} title={s.tip}>{s.icon} {k} {counts[k]}</span>)}
+          </div>
         )}
         {rows.length > 0 && (
           <div className="table-scroll" style={{ maxHeight: '420px', overflowY: 'auto' }}>
