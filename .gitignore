@@ -10,3 +10,8 @@ node_modules/
 frontend/dist/
 .pytest_cache/
 *.egg-info/
+
+# desktop shell (Tauri): vendored runtime, staged app tree and Rust build output
+desktop/src-tauri/vendor/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

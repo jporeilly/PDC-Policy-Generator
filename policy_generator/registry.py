@@ -61,8 +61,10 @@ def discover_registries() -> list:
     """Find Registry files the Glossary Generator wrote, no configuration
     needed. Looks (in order) at POLICY_REGISTRY_DIR, then for a
     glossary_generator/registries/ folder in this repo's parent — the layout
-    when this repo is cloned inside the Glossary checkout (~/PDC-Demo) — and
-    finally in sibling Glossary checkouts. Newest first."""
+    when this repo is cloned inside the Glossary checkout (~/PDC-Demo) —
+    then sibling Glossary checkouts, and finally the packaged Glossary
+    desktop app's per-user state (%APPDATA%), so the two Windows installers
+    hand off with no configuration either. Newest first."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root
     parent = os.path.dirname(root)                # the folder the repo was cloned into
     candidates = []
@@ -75,6 +77,17 @@ def discover_registries() -> list:
         os.path.join(parent, "PDC-Glossary", "glossary_generator", "registries"),
         os.path.join(parent, "PDC-Glossary-Generator", "glossary_generator", "registries"),
     ]
+    # The packaged Glossary Generator (its desktop/ installer) keeps state per
+    # user, not beside the code: the Tauri shell sets GLOSSARY_STATE_DIR to the
+    # first path, and the app's own fallback when unset is the second (see the
+    # Glossary repo's core/paths.py). Registries land in registries/ under
+    # either, so a packaged Policy Generator finds them with nothing set.
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates += [
+            os.path.join(appdata, "com.pentaho.pdc-glossary", "registries"),
+            os.path.join(appdata, "PDC-Glossary", "registries"),
+        ]
     found = []
     for d in candidates:
         if os.path.isdir(d):

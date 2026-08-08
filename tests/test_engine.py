@@ -46,6 +46,19 @@ class TestRegistry:
         assert {c["term_name"] for c in registry.seeded_concepts(reg)} == {"State Code", "Audit Record"}
         assert registry.summary(reg)["seeded"] == 2
 
+    def test_discovery_covers_packaged_glossary_state(self, tmp_path, monkeypatch):
+        # The packaged Glossary desktop app writes registries under %APPDATA%
+        # (com.pentaho.pdc-glossary\registries); a packaged Policy Generator
+        # must find them with nothing configured, or the two Windows installers
+        # need hand-wired paths to talk to each other.
+        state = tmp_path / "com.pentaho.pdc-glossary" / "registries"
+        state.mkdir(parents=True)
+        (state / "registry.claims.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setenv("APPDATA", str(tmp_path))
+        monkeypatch.delenv("POLICY_REGISTRY_DIR", raising=False)
+        found = registry.discover_registries()
+        assert str(state / "registry.claims.json") in found
+
     def test_write_seed_request_schema(self, tmp_path):
         path = registry.write_seed_request(str(tmp_path), "registry.claims.json",
                                            ["Member Phone", "  ", "Broker Email"])

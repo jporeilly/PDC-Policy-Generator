@@ -1,7 +1,19 @@
 # Version
 
-**1.9.0** — 2026-07-18
+**1.10.0** — 2026-08-08
 
+Windows desktop installer. The app now ships as a `.exe` built from the new
+`desktop/` Tauri shell — the same packaging as the Glossary Generator and
+Catalog Insights: a vendored Python embeddable runtime (nothing to install),
+a live-log splash with a retry/report failure panel, a kill-on-close job
+object, and an NSIS components installer (Full = app + environment check;
+silent `/S /NoCheck`). `discover_registries()` additionally searches the
+packaged Glossary app's per-user state
+(`%APPDATA%\com.pentaho.pdc-glossary\registries`), so the two installers hand
+off on one laptop with nothing configured. No state-dir plumbing was needed:
+the app's one write lands beside the loaded Registry, by design.
+
+Previously — **1.9.0** (2026-07-18):
 The no-seed loop closes. The `classification-registry/1` contract gains an
 OPTIONAL per-concept `detection_intent` field (`"seeded"` | `"mapping_only"`;
 absent = unknown — fully backward compatible): `mapping_only` records the
@@ -13,18 +25,3 @@ from drift's `missing` verdict. For the terms still waiting,
 `seed-request.json` beside the loaded Registry — the shared `registries/`
 folder — for the Glossary app to discover. Plus two layout fixes (Load
 table column alignment, Bound-badge nowrap).
-
-Previously — **1.8.1** (2026-07-17):
-docs-only release — README and INSTALL.md caught up with the shipped 1.8.0
-Deploy + Drift lifecycle (explainer cards, footer PDC session status,
-`drift.py` in the engine listing).
-
-Previously — **1.8.0** (2026-07-17):
-the lifecycle is complete: **Deploy** (programmatic import over PDC's
-discovered import API, post-import term-id re-stamping, optional scoped
-DATA_IDENTIFICATION job) and **Drift-check** (per-method clean / drifted /
-orphaned / missing verdicts against the Registry) ship, both verified live
-against PDC 11.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
-The runtime source of truth is `policy_generator/VERSION` (the API banner and
-`python -m policy_generator --version` read it); a docs-consistency test keeps
-every marker in agreement.

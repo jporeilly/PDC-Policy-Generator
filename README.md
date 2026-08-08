@@ -1,16 +1,16 @@
 # Pentaho Data Catalog Policy Generator
 
-**Version:** 1.9.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
+**Version:** 1.10.0 (`policy_generator/VERSION`) · validated against Pentaho Data Catalog 11.0.0 (public API v3) · [changelog](CHANGELOG.md)
 
-> **1.9.0 — the no-seed loop closes.** The contract gains an optional
-> per-concept `detection_intent` field: `"mapping_only"` records the
-> steward's explicit call that no detectable shape exists, moving the
-> concept out of the Author page's amber "needs a seed" bucket for good
-> (and exempting it from drift's `missing` verdict). For the terms still
-> waiting, **⇪ Export seed request** writes `seed-request.json` beside the
-> loaded Registry so the Glossary app can discover the ask — both directions
-> of the loop are files in the shared `registries/` folder, no runtime
-> coupling.
+> **1.10.0 — the Windows installer.** The app now ships as a `.exe` built
+> from the new `desktop/` Tauri shell — vendored Python, live-log splash,
+> NSIS components installer — packaged exactly like the Glossary Generator
+> and Catalog Insights. On a laptop with both installers, a Registry
+> exported by the Glossary app is discovered automatically from its
+> per-user state folder: the hand-off needs nothing configured.
+> (1.9.0 closed the no-seed loop: `detection_intent: "mapping_only"`
+> settles seedless concepts, and **⇪ Export seed request** writes the ask
+> beside the Registry for the Glossary app to find.)
 
 A local-first app that **reads the Glossary Generator's Classification
 Registry and manages PDC's Data Identification side of the contract**: it
@@ -187,6 +187,7 @@ policy_generator/       the app: engine (registry.py, author.py, pdc.py,
                         drift.py), CLI, FastAPI web layer (api.py), launchers,
                         VERSION
 frontend/               React (Vite) UI — served by the API from frontend/dist
+desktop/                Windows installer: Tauri shell + vendored Python (.exe)
 tests/                  pytest suite: engine invariants, API flows (PDC mocked),
                         docs-consistency enforcement
 docs/
@@ -220,6 +221,14 @@ flowchart LR
 
 **Requirements:** Python 3.9+. PDC is reached only when *you* import and run
 the methods — the app itself stays offline. **No LLM.**
+
+**Windows laptop? There is an installer.** `desktop/` packages the app
+(vendored Python included — nothing to install first) into a `.exe`, the same
+way the Glossary Generator and Catalog Insights ship. Build:
+`cd frontend; npm run build`, then `cd ..\desktop; npm install; npm run
+tauri:build`. A Registry exported by the *installed* Glossary app is
+discovered automatically (`%APPDATA%\com.pentaho.pdc-glossary\registries`).
+See [`desktop/README.md`](desktop/README.md).
 
 On the **Windows 11 host** (the standard topology — apps on the host, lab +
 PDC on the VM), the whole suite is one bootstrap into `C:\PDC-Demo`

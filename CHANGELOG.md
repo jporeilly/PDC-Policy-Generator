@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.10.0] — 2026-08-08
+
+### Added — Windows desktop installer (Tauri + vendored Python)
+
+The Policy Generator now ships as a Windows `.exe`, packaged exactly like the
+Glossary Generator and Catalog Insights: a `desktop/` Tauri shell that starts
+the existing FastAPI server on a free port and points a webview at it — one
+UI, served the same way in browser and desktop.
+
+- **`desktop/` shell**: live-log splash driven by real uvicorn signals, a
+  failure panel (retry in place / copy / save report / email support, plus
+  local-model suggestions when the machine happens to run Ollama), a
+  kill-on-close job object so a crashed shell never leaks uvicorn, and a
+  vendored Python embeddable runtime (fastapi, uvicorn, python-multipart —
+  nothing to install on the laptop). NSIS components page: Full (app +
+  environment check) / Minimal (app only); silent flag `/S /NoCheck`.
+  `provisioning\check-environment.ps1` reports rather than blocks and knows
+  the PDC bare-IP vhost trap and the self-signed-vs-unreachable distinction.
+  Code signing wired and off (`POLICY_SIGN_THUMBPRINT` or the suite-wide
+  `PDCG_SIGN_THUMBPRINT`).
+- **Registry discovery covers the packaged Glossary app.**
+  `discover_registries()` now also looks in
+  `%APPDATA%\com.pentaho.pdc-glossary\registries` (the Glossary desktop
+  install's per-user state) and `%APPDATA%\PDC-Glossary\registries` (its
+  unset-variable fallback), so the two Windows installers hand off on one
+  laptop with nothing configured. The splash reports how many Registry files
+  it can see before the app even opens. Covered by a new engine test.
+- No state-dir plumbing was needed, and that is by design: the app's one
+  write (`seed-request.json`) lands beside the loaded Registry, and PDC
+  credentials never persist — so the packaged build under a read-only
+  Program Files changes nothing about how the app behaves.
+
 ## [1.9.0] — 2026-07-18
 
 ### Added — the no-seed loop closes
