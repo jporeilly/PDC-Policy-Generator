@@ -80,7 +80,13 @@ function Get-RegistryDirs {
         policy_generator\registry.py's discover_registries() candidates that
         exist on a LAPTOP install: the packaged Glossary app's per-user state
         (Tauri-keyed, then the app's own fallback), then POLICY_REGISTRY_DIR.
-        Returns only directories that exist.
+        Returns only directories that exist - ALWAYS as an array. The comma
+        matters: function output unrolls through the pipeline, so a bare @()
+        reaches the caller as $null when no folder matches and as a bare
+        string when one does - and under Set-StrictMode Latest neither has
+        .Count, which killed check-environment.ps1 (and made the installer
+        print "[!!] problems found") on any machine without a populated
+        Glossary hand-off folder.
     #>
     $candidates = @()
     if ($env:POLICY_REGISTRY_DIR) { $candidates += $env:POLICY_REGISTRY_DIR }
@@ -88,5 +94,5 @@ function Get-RegistryDirs {
         $candidates += (Join-Path $env:APPDATA "com.pentaho.pdc-glossary\registries")
         $candidates += (Join-Path $env:APPDATA "PDC-Glossary\registries")
     }
-    return @($candidates | Where-Object { Test-Path -LiteralPath $_ })
+    return ,@($candidates | Where-Object { Test-Path -LiteralPath $_ })
 }
