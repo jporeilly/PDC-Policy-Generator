@@ -66,8 +66,13 @@ New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 # directory, so any subpackage __pycache__ from the dev checkout would ship
 # into Program Files, where the uninstaller leaves it behind (found on
 # PDC-Insights 1.17.0). A relative name matches at any depth.
+#
+# .venv matters here specifically: run.ps1 creates the dev virtualenv INSIDE
+# policy_generator\, so without the exclude every release since 1.10.0 shipped
+# a second Python's packages (~17 MB: pip, activate scripts, venv copies of
+# fastapi/uvicorn) into Program Files beside the vendored runtime.
 & robocopy $srcApp $stageApp "/E" "/NFL" "/NDL" "/NJH" "/NJS" "/NP" `
-    "/XD" "__pycache__" ".pytest_cache" | Out-Null
+    "/XD" "__pycache__" ".pytest_cache" ".venv" "venv" | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed staging the app package (exit $LASTEXITCODE)" }
 
 # The built SPA, one level up from policy_generator - the shape api.py expects
@@ -84,6 +89,12 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "CHANGELOG.md") -Destination (Join-P
 # runtime's ._pth replaces sys.path outright, so without this the server cannot
 # import policy_generator.api whatever working directory it is given.
 Copy-Item -LiteralPath (Join-Path $desktopDir "boot.py") -Destination (Join-Path $stageDir "boot.py") -Force
+
+# Belt and braces: prove no environment slipped through. The staged tree runs
+# on the VENDORED runtime; a bundled dev venv is 17 MB of wrong Python.
+if (Test-Path -LiteralPath (Join-Path $stageApp ".venv")) {
+    throw "the dev .venv reached the staging tree - fix the exclude list"
+}
 
 # The paths the shell and the server actually depend on. Assert them here,
 # where the fix is obvious, rather than at first launch on a customer's laptop.
