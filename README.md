@@ -226,7 +226,8 @@ the methods — the app itself stays offline. **No LLM.**
 (vendored Python included — nothing to install first) into a `.exe`, the same
 way the Glossary Generator and Catalog Insights ship. Build:
 `cd frontend; npm run build`, then `cd ..\desktop; npm install; npm run
-tauri:build`. A Registry exported by the *installed* Glossary app is
+dist` — the `.exe` is copied to `dist\` at the repo root (one short path).
+A Registry exported by the *installed* Glossary app is
 discovered automatically (`%APPDATA%\com.pentaho.pdc-glossary\registries`).
 See [`desktop/README.md`](desktop/README.md).
 

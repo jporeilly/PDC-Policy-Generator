@@ -15,3 +15,8 @@ frontend/dist/
 desktop/src-tauri/vendor/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+
+# collected build artifacts (installers copied here by desktop's collect
+# script for one short path) - 20MB binaries never belong in git.
+# Anchored: desktop/dist (the splash) and frontend/dist have their own rules.
+/dist/

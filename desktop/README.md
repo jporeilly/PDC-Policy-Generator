@@ -28,10 +28,13 @@ desktop/
 ```powershell
 cd frontend; npm ci; npm run build     # the SPA must exist first
 cd ..\desktop; npm install
-npm run tauri:build                    # fetch:python + stage:app run automatically
+npm run dist                           # stage + tauri:build + collect
 ```
 
-The installer lands in `src-tauri/target/release/bundle/nsis/`.
+The installer is copied to **`dist\` at the repo root** (one short path;
+`npm run collect` prints it with a sha256). Tauri's own output stays in
+`src-tauri/target/release/bundle/nsis/` — `npm run tauri:build` alone stops
+there.
 
 `npm run tauri:dev` runs against the checkout instead — no staging, no vendored
 runtime, `python` from PATH. Edit Python, reload the window, done.
