@@ -1,0 +1,249 @@
+PDC Policy Generator
+Data Identification Tool - License, Privacy and Installation Notice
+
+PLEASE READ BEFORE INSTALLING. By downloading, installing, copying or
+using this software you accept the terms below. If you do not accept
+them, do not install or use the software, and remove any copy you
+have obtained.
+
+
+1. LICENCE AND PERMITTED USE
+
+This software reads the Classification Registry exported by the PDC
+Glossary Generator and manages the Data Identification side of that
+contract: it authors import-ready Data Patterns and Dictionaries,
+reconciles term bindings against a Pentaho Data Catalog instance,
+deploys the methods over the catalog's import API, and checks deployed
+methods for drift. It is used in Pentaho training workshops and
+pre-sales engagements, and is provided for use on authorised machines
+and by authorised personnel only. You may install and use it for that
+purpose. You may not sell, sublicense, rent or otherwise commercially
+exploit the software, and you may not remove or alter any proprietary
+notice it contains.
+
+
+2. YOUR REGISTRY AND YOUR CATALOG
+
+The software reads Classification Registry files. A Registry describes
+your data estate: table and column names, business terms, governed
+tags, sensitivity levels, and detection seeds - value patterns induced
+from profiled data and reference-value lists that may contain actual
+values sampled from your estate. Treat Registry files with the same
+care as the data they describe.
+
+Unlike a purely reporting tool, this software can WRITE to the catalog
+you configure: Deploy imports identification methods, re-stamps term
+bindings, and can trigger a data-identification job scoped to entities
+you choose; Retire removes methods. Nothing is deployed, changed or
+removed until you explicitly choose it in the app, and everything the
+software authors is presented for review first.
+
+You are responsible for having the authority to load each Registry,
+to connect to the catalog with the account you configure, and for the
+effect of the methods you choose to deploy. Use an account scoped to
+what the lifecycle actually needs.
+
+
+3. WHAT THE INSTALLER DOES TO YOUR SYSTEM
+
+You acknowledge that installation modifies the computer it runs on.
+Depending on the options you select, the installer and application
+may:
+
+  - write program files to the chosen installation directory, and
+    create Start menu and desktop shortcuts;
+  - install a self-contained Python runtime inside the installation
+    directory - your system Python, if any, is not modified or used;
+  - install the Microsoft Edge WebView2 Runtime if it is not already
+    present, using the bootstrapper supplied by Microsoft;
+  - run a local HTTP server on a free port, bound to 127.0.0.1 only,
+    for the application's own user interface;
+  - connect over the network to the Pentaho Data Catalog instance
+    you configure.
+
+You are solely responsible for deciding whether to install the
+software on any given machine, for having the authority to do so, and
+for complying with the policies of the organisation that owns that
+machine. Back up any important data before installing.
+
+
+4. NO AI ASSISTANCE - DETERMINISTIC BY DESIGN
+
+This software contains no artificial intelligence system and calls no
+language model, local or hosted. Every regex and reference list it
+emits was induced deterministically from profiled data by the Glossary
+Generator's scan and travels inside the Registry; this software
+arranges those seeds into the catalog's own import formats without
+generating content of its own. The same input always produces the
+same output.
+
+This is deliberate: identification methods decide what a catalog
+treats as personal or sensitive data, and a probabilistic system
+authoring them would place the resulting deployment in a materially
+different regulatory position. Do not modify the software to add
+AI-generated methods without recording that change and its
+consequences yourself.
+
+
+5. DATA PROTECTION AND PRIVACY
+
+  (a) Data kept on your machine. The software keeps no state of its
+      own beside the code: it reads the Registry files you point it
+      at, and its one file output - a seed request for terms that
+      still need detection seeds - is written beside the loaded
+      Registry, where the Glossary Generator looks for it.
+
+  (b) Credentials are never persisted. The catalog credentials you
+      enter for reconcile/deploy are held in memory for the session
+      and are gone when the application closes. Nothing writes them
+      to disk.
+
+  (c) Your catalog. Deploy sends the authored identification methods
+      - names, regexes, reference values, tag stampings and term
+      bindings - to the Pentaho Data Catalog instance you configure,
+      and can trigger identification jobs there. This is the purpose
+      of the tool; nothing is sent until you choose to deploy.
+
+  (d) Personal data in the Registry. Detection seeds may include
+      value patterns and reference lists derived from profiled estate
+      data, which can themselves reveal or contain personal data.
+      Load and store Registry files only where you are entitled to
+      process that data, and delete exported artifacts (method zips,
+      seed requests) when no longer needed.
+
+  (e) Controller. The organisation operating the software determines
+      the purposes and means of this processing and is the data
+      controller. It is responsible for its own privacy notice,
+      lawful basis, retention periods and transfer mechanisms. The
+      authors of the software supply a tool and operate no service on
+      your behalf.
+
+  (f) Your rights. Subject to applicable law you have the right to
+      request access to, rectification of, or erasure of your
+      personal data, to restrict or object to its processing, and to
+      data portability, and to complain to your data protection
+      supervisory authority. Exercise these rights with the
+      organisation named in its privacy notice. Locally held Registry
+      copies and exports can be removed at any time by deleting the
+      files.
+
+  (g) Data minimisation. Load only the Registry you need, deploy only
+      the methods you intend to govern with, and scope identification
+      jobs to the entities that need them.
+
+
+6. REGIONAL LEGAL FRAMEWORKS
+
+Data protection law is territorial. Where the software is deployed,
+and where the data described by the Registry originates, determines
+which regime applies. The organisation operating the software is
+responsible for identifying and meeting the requirements applicable
+to it. Section 5 is written to the GDPR standard because it is the
+strictest common denominator; it does not displace local law.
+
+  (a) Regimes expressly acknowledged. Without limitation, these
+      include: the EU GDPR, UK GDPR and Data Protection Act, and
+      Swiss FADP; in the United States, the comprehensive state
+      privacy laws now in force (including California CCPA/CPRA,
+      Colorado, Connecticut, Virginia, Texas, Washington and others,
+      twenty states as at mid-2026), together with any applicable
+      sectoral rules such as HIPAA or GLBA where the estate holds
+      health or financial data; in Canada, PIPEDA and Quebec Law 25;
+      in Latin America, Brazil's LGPD, Mexico's LFPDPPP, and the
+      regimes of Argentina, Chile and Colombia; in Asia-Pacific,
+      Australia's Privacy Act and Australian Privacy Principles, New
+      Zealand's Privacy Act 2020, Japan's APPI, South Korea's PIPA,
+      Singapore's PDPA, India's DPDP Act, and China's PIPL; and in
+      the Middle East and Africa, the UAE and Saudi PDPL regimes and
+      South Africa's POPIA.
+
+  (b) United States - no sale or sharing. The software does not sell
+      personal information, and does not share it for cross-context
+      behavioural advertising, as those terms are defined under the
+      CCPA/CPRA and comparable state laws. No personal information is
+      used for targeted advertising or profiling.
+
+  (c) Cross-border transfers. Deploying methods to a catalog hosted
+      outside your jurisdiction, or moving Registry files across
+      borders, may constitute a cross-border transfer requiring a
+      transfer mechanism such as standard contractual clauses, an
+      adequacy decision, a security assessment or explicit consent.
+      Choosing an appropriately located catalog, and the transfer
+      mechanism, is your responsibility.
+
+  (d) AI regulation. This software contains no AI system (section 4),
+      which is relevant to obligations under Regulation (EU)
+      2024/1689 (the EU AI Act) and comparable rules emerging in
+      other jurisdictions: the identification methods it authors are
+      deterministic artifacts of the profiled scan, not AI output.
+      Where the surrounding pipeline uses AI (the Glossary
+      Generator's drafting features), that tool's own notice governs.
+
+  (e) Configuring for your region. The author stage is fully offline;
+      only reconcile, deploy and drift-check touch the network, and
+      each is invoked explicitly. Where a regime cannot be satisfied,
+      export the reviewed method zip and take it through your own
+      controlled import process instead of deploying directly.
+
+
+7. THIRD-PARTY COMPONENTS
+
+This application bundles or may install the following third-party
+components, each governed by its own licence terms and not by this
+notice:
+
+  - The Python runtime and standard library, under the PSF License,
+    together with the third-party packages it bundles - the web
+    framework and its server - each under its own licence.
+  - Microsoft Edge WebView2 Runtime and bootstrapper, subject to the
+    applicable Microsoft licence terms.
+
+Nothing in this notice limits any rights you have under the licence
+of a third-party component.
+
+
+8. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY
+OF ANY KIND, EXPRESS, IMPLIED OR STATUTORY, INCLUDING WITHOUT
+LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF MERCHANTABILITY,
+SATISFACTORY QUALITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND
+NON-INFRINGEMENT. NO WARRANTY IS GIVEN THAT THE SOFTWARE WILL BE
+UNINTERRUPTED, SECURE OR ERROR FREE, THAT DEFECTS WILL BE CORRECTED,
+OR THAT ANY IDENTIFICATION METHOD, RECONCILIATION, DEPLOYMENT OR
+DRIFT VERDICT IT PRODUCES IS COMPLETE, CURRENT OR ACCURATE. ANY
+SUPPORT IS PROVIDED AT THE AUTHORS' DISCRETION AND CREATES NO
+OBLIGATION.
+
+
+9. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL
+THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN CONTRACT, TORT (INCLUDING NEGLIGENCE) OR
+OTHERWISE, ARISING FROM OR IN CONNECTION WITH THE DOWNLOAD,
+INSTALLATION, USE, MISUSE, PERFORMANCE OR INABILITY TO USE THE
+SOFTWARE OR ANY METHOD IT AUTHORS OR DEPLOYS, INCLUDING WITHOUT
+LIMITATION ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR
+PUNITIVE DAMAGES, LOSS OF PROFITS, LOSS OF BUSINESS, BUSINESS
+INTERRUPTION, LOSS OF DATA, CORRUPTION OF DATA, DAMAGE TO OR
+MISCONFIGURATION OF ANY SYSTEM OR CATALOG, OR THE COST OF SUBSTITUTE
+GOODS OR SERVICES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+YOU INSTALL AND USE THE SOFTWARE ENTIRELY AT YOUR OWN RISK.
+
+Nothing in this notice excludes or limits liability that cannot
+lawfully be excluded or limited, including liability for death or
+personal injury caused by negligence, for fraud or fraudulent
+misrepresentation, or under applicable data protection law. Where
+liability cannot be excluded, it is limited to the minimum extent
+permitted by applicable law. Some jurisdictions do not allow certain
+exclusions or limitations, so parts of the above may not apply to
+you; the remaining provisions continue in effect.
+
+
+10. TRADEMARKS
+
+Pentaho(R) is a registered trademark of Pentaho Canada Inc. All other
+trademarks are the property of their respective owners. This notice
+grants no trademark rights.

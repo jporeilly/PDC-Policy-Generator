@@ -63,7 +63,8 @@
         "sidebarImage": "icons/nsis-sidebar.bmp"
       },
       "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/sign.ps1 %1"
-    }
+    },
+    "licenseFile": "../../LICENSE.txt"
   },
   "plugins": {}
 }

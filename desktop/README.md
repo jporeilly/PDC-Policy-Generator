@@ -50,7 +50,10 @@ no `*_STATE_DIR` redirect. The per-user data folder
 
 **No Ollama step.** The Policy Generator is deterministic by design — no LLM
 anywhere in the pipeline — so the installer's Full type is just the app plus
-the environment check.
+the environment check. The wizard shows the suite licence page like the other
+two apps (`LICENSE.txt`, adapted here: the tool WRITES to the catalog on
+Deploy, Registry seeds can carry profiled sample values, and §4 records that
+the software contains no AI at all).
 
 **The Registry hand-off is automatic.** `discover_registries()` also looks in
 the packaged Glossary Generator's per-user state
