@@ -61,8 +61,13 @@ New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 # robocopy: mirror of a clean tree. Exit codes 0-7 are success (8+ is a real
 # failure) - a quirk worth pinning, because treating any non-zero as failure
 # makes every build look broken.
+#
+# /XD is RELATIVE on purpose: an absolute path matches only the top-level
+# directory, so any subpackage __pycache__ from the dev checkout would ship
+# into Program Files, where the uninstaller leaves it behind (found on
+# PDC-Insights 1.17.0). A relative name matches at any depth.
 & robocopy $srcApp $stageApp "/E" "/NFL" "/NDL" "/NJH" "/NJS" "/NP" `
-    "/XD" (Join-Path $srcApp "__pycache__") | Out-Null
+    "/XD" "__pycache__" ".pytest_cache" | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed staging the app package (exit $LASTEXITCODE)" }
 
 # The built SPA, one level up from policy_generator - the shape api.py expects
