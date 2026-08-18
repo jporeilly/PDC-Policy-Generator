@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.10.1] — 2026-08-18
+
+### Added — name-anchored seeds, and an Evidence column that says so
+
+The Glossary's Registry (1.38.24) now carries a class of seed it used to drop:
+the steward's **Auto flip** on a concept whose values carry no identifying
+shape — a date, a bounded measure like pH or Lead ppb. Such a seed arrives
+marked `identity: "column_name"`, and this app authors it differently:
+
+- **The blend rebalances to name 0.5 + regex 0.5**, with the condition
+  `confidenceScore >= 0.7 AND columnCardinality > 5`. Neither half clears the
+  gate alone, so the rule is a strict name-AND-shape conjunction — under the
+  stock 0.3/0.3/0.4 weights the same rule would either never fire or, trusting
+  the shape alone, tag every numeric column in the estate. The cardinality
+  guard is the one PDC's own shipped template uses: a constant column cannot
+  satisfy a sanity shape. `metadataHints.aliases[].score` follows the name
+  weight, so the hint and the confidence formula never tell PDC two different
+  stories.
+- **A profile signature rides such a rule at weight 0** — informative, inert.
+  A flipped date does carry a `dddd-dd-dd` signature and dropping it would lose
+  evidence PDC's own screens show.
+- **Evidence column** on both Author tables (and `evidence` on every
+  `/api/preview` row): profiled / recognised / curated / name-anchored, each
+  with the one-line reason it is what it is. 88 authored methods of which 67
+  rest on a column name is a fact a reviewer must be able to see without
+  opening the JSON.
+
+Profiled seeds are untouched — same weights, same condition, same envelope
+verified against live PDC 11 in 1.8.0. 57 tests.
+
 ## [1.10.0] — 2026-08-08
 
 ### Added — Windows desktop installer (Tauri + vendored Python)

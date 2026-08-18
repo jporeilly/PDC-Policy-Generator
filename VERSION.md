@@ -1,6 +1,18 @@
 # Version
 
-**1.10.0** — 2026-08-08
+**1.10.1** — 2026-08-18
+
+Name-anchored seeds. The Registry the Glossary Generator writes now carries the
+steward's Auto flip on a concept whose values have no identifying shape — a
+date, a bounded measure like pH or Lead ppb — as a pattern seed marked
+`identity: "column_name"`. Authoring one with the stock weights would ship a
+rule that either never fires or tags every numeric column in the estate, so
+the blend rebalances to name 0.5 + regex 0.5 with PDC's own cardinality guard,
+and the rule fires only when name AND shape agree. The Author tables gained an
+**Evidence** column, because a name-anchored method is a weaker claim than a
+profiled shape and a reviewer is entitled to see which is which.
+
+Previously — **1.10.0** (2026-08-08):
 
 Windows desktop installer. The app now ships as a `.exe` built from the new
 `desktop/` Tauri shell — the same packaging as the Glossary Generator and

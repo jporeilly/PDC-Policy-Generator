@@ -14,6 +14,27 @@ const BUCKETS = {
              hint: 'Term-to-column mapping (not identification) is the governance mechanism here.' },
 }
 
+// What a method rests on. Not decoration: a profiled shape was induced from the
+// estate's own values, while a name-anchored rule exists because a steward
+// declared the column NAME authoritative for a concept whose values carry no
+// identifying shape (a date, a bounded measure). Same table, different strength
+// of claim — the reviewer is entitled to see which is which.
+const EVIDENCE = {
+  profiled: { cls: 'good', label: 'profiled',
+              hint: 'Induced from the estate’s own values by the Glossary scan.' },
+  recognised: { cls: 'good', label: 'recognised',
+                hint: 'The profiler matched a known kind (email, phone, …) in this estate’s data; the shape is the profiler’s own.' },
+  curated: { cls: 'neutral', label: 'curated',
+             hint: 'A vetted seed from the versioned domain pack — the baseline for concepts profiling cannot induce.' },
+  'name-anchored': { cls: 'accent', label: 'name-anchored',
+                     hint: 'The steward flipped a mapping-only concept to Auto: the column NAME carries identity and the content regex is only a sanity check. Fires only when name AND shape agree.' },
+}
+
+function EvidenceBadge({ kind }) {
+  const e = EVIDENCE[kind] || EVIDENCE.profiled
+  return <span className={`badge ${e.cls}`} title={e.hint}>{e.label}</span>
+}
+
 // The 1.5.x "What these groups mean" legend, in the suite's expandable
 // explainer pattern (details.card > summary, collapsed by default): a
 // skipped concept is not ungoverned — a different mechanism owns it.
@@ -157,9 +178,10 @@ export default function AuthorPage({ summary }) {
           </div>
         </header>
         <p className="hint-line">
-          Deterministic and offline: every regex and reference list below was induced from
-          profiled data by the Glossary scan and travels inside the Registry. The zip is in
-          the exact layout PDC 11's own Export produces — review before importing.
+          Deterministic and offline: every regex, reference list and steward decision below
+          travels inside the Registry — nothing is re-decided here. The <b>Evidence</b> column
+          says what each method rests on, because they are not equally strong claims. The zip is
+          in the exact layout PDC 11's own Export produces — review before importing.
         </p>
         {error && <div className="error">{error}</div>}
 
@@ -169,7 +191,8 @@ export default function AuthorPage({ summary }) {
             <div className="table-scroll">
               <table>
                 <thead>
-                  <tr><th>Method</th><th>Term</th><th>Bound</th><th>Content regex</th>
+                  <tr><th>Method</th><th>Term</th><th>Bound</th><th>Evidence</th>
+                      <th>Content regex</th>
                       <th>Signature</th><th>Column hint</th><th>Tags</th></tr>
                 </thead>
                 <tbody>
@@ -180,6 +203,7 @@ export default function AuthorPage({ summary }) {
                       <td>{p.term_id
                         ? <span className="badge good" title={p.term_id}>✓ by id</span>
                         : <span className="badge warning" title="Reconcile to bind by id">⚠ by name</span>}</td>
+                      <td><EvidenceBadge kind={p.evidence} /></td>
                       <td className="mono cell-clip" title={p.regex}>{p.regex}</td>
                       <td className="mono cell-clip" title={p.signature ?? ''}>{p.signature ?? '—'}</td>
                       <td className="mono cell-clip" title={p.column_hint ?? ''}>{p.column_hint ?? '—'}</td>
@@ -194,7 +218,8 @@ export default function AuthorPage({ summary }) {
             <div className="table-scroll">
               <table>
                 <thead>
-                  <tr><th>Method</th><th>Term</th><th>Bound</th><th className="num">Values</th>
+                  <tr><th>Method</th><th>Term</th><th>Bound</th><th>Evidence</th>
+                      <th className="num">Values</th>
                       <th>Sample</th><th>Column hint</th><th>Tags</th></tr>
                 </thead>
                 <tbody>
@@ -205,6 +230,7 @@ export default function AuthorPage({ summary }) {
                       <td>{d.term_id
                         ? <span className="badge good" title={d.term_id}>✓ by id</span>
                         : <span className="badge warning" title="Reconcile to bind by id">⚠ by name</span>}</td>
+                      <td><EvidenceBadge kind={d.evidence} /></td>
                       <td className="num">{d.values_count}</td>
                       <td className="notes cell-clip" title={d.values.slice(0, 12).join(', ')}>
                         {d.values.slice(0, 5).join(', ')}{d.values_count > 5 ? '…' : ''}

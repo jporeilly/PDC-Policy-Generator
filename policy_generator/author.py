@@ -87,17 +87,38 @@ def _actions(tags, term, term_id):
 
 
 def _pattern_def(name, description, category, col_rx, signature, content_rx,
-                 tags, term, term_id):
+                 tags, term, term_id, identity=None):
     """A DataPattern envelope, field-for-field like PDC 11's Pattern_Export.
     Confidence weights adapt to the evidence present (regex always; profile
-    signature and column hints when the Registry carries them)."""
+    signature and column hints when the Registry carries them).
+
+    `identity="column_name"` marks a NAME-ANCHORED seed: the steward flipped a
+    concept whose values carry no identifying shape (a date, a bounded measure
+    like pH or Lead ppb) to Auto, declaring the column NAME authoritative. The
+    content regex is then only a sanity check, so the blend rebalances to name
+    0.5 + regex 0.5 and the rule fires only when BOTH agree — under the stock
+    weights the name could never carry a rule past the gate on its own, and
+    trusting the shape alone would tag every numeric column in the estate. The
+    cardinality guard is PDC's own shipped-template guard: a constant column
+    cannot satisfy a sanity shape.
+
+    A profile signature still rides such a rule at weight 0 — informative,
+    inert — because a flipped date DOES carry a dddd-dd-dd signature and
+    dropping it would lose evidence PDC's own screens show."""
+    named = identity == "column_name" and bool(col_rx)
     parts = []
-    if signature:
-        parts.append({"*": [{"var": "profilePatternScore"}, "0.30"]})
-    if col_rx:
-        parts.append({"*": [{"var": "metadataScore"}, "0.30"]})
-    regex_w = "%.2f" % (1.0 - 0.3 * len(parts))
-    parts.insert(0, {"*": [{"var": "regexScore"}, regex_w]})
+    if named:
+        parts = [{"*": [{"var": "metadataScore"}, "0.50"]},
+                 {"*": [{"var": "regexScore"}, "0.50"]}]
+        if signature:
+            parts.append({"*": [{"var": "profilePatternScore"}, "0.00"]})
+    else:
+        if signature:
+            parts.append({"*": [{"var": "profilePatternScore"}, "0.30"]})
+        if col_rx:
+            parts.append({"*": [{"var": "metadataScore"}, "0.30"]})
+        regex_w = "%.2f" % (1.0 - 0.3 * len(parts))
+        parts.insert(0, {"*": [{"var": "regexScore"}, regex_w]})
     d = {
         "_id": str(uuid.uuid5(_NS, f"pattern:{name}")),
         "name": name,
@@ -107,7 +128,10 @@ def _pattern_def(name, description, category, col_rx, signature, content_rx,
             "type": "DataPattern",
             "minSamples": "1",
             "confidenceScore": {"+": parts},
-            "condition": {"and": [{">=": [{"var": "confidenceScore"}, 0.5]}]},
+            "condition": ({"and": [{">=": [{"var": "confidenceScore"}, 0.7]},
+                                   {">": [{"var": "columnCardinality"}, "5"]}]}
+                          if named else
+                          {"and": [{">=": [{"var": "confidenceScore"}, 0.5]}]}),
             "actions": _actions(tags, term, term_id),
         }],
         "categories": [category],
@@ -123,7 +147,10 @@ def _pattern_def(name, description, category, col_rx, signature, content_rx,
     if signature:
         d["profilePatterns"] = [signature]
     if col_rx:
-        d["metadataHints"] = {"aliases": [{"nameRegex": col_rx, "score": 0.3}]}
+        # the alias score mirrors the blend's name weight, so the hint and the
+        # confidence formula never tell PDC two different stories
+        d["metadataHints"] = {"aliases": [{"nameRegex": col_rx,
+                                           "score": 0.5 if named else 0.3}]}
     return d
 
 
@@ -214,14 +241,21 @@ def author(reg: dict, prefix: str = None) -> dict:
                 patterns.append({
                     "filename": f"{_slug(prefix)}_{_slug(term)}.json",
                     "term": term, "term_id": c.get("term_id"),
+                    # what the rule rests on, carried through to the review
+                    # manifest: a name-anchored rule is a weaker claim than a
+                    # profiled shape and the steward must be able to see which
+                    # is which without opening the JSON
+                    "evidence": (seed.get("source") or "profiled"),
                     "rule": _pattern_def(name, desc, category, col_rx,
                                          (seed.get("signature") or "").strip() or None,
-                                         seed["regex"].strip(), tags, term, c.get("term_id")),
+                                         seed["regex"].strip(), tags, term, c.get("term_id"),
+                                         identity=seed.get("identity")),
                 })
             elif kind == "dictionary" and len(seed.get("values") or []) >= 2:
                 slug = f"{_slug(prefix)}_{_slug(term)}"
                 dictionaries.append({
                     "filename": f"{slug}.json",
+                    "evidence": (seed.get("source") or "profiled"),
                     "values_filename": f"{slug}.csv",
                     "zipname": f"{slug}.zip",
                     "term": term, "term_id": c.get("term_id"),

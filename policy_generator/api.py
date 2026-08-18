@@ -249,7 +249,7 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
     def _pat(p):
         r = p["rule"]
         return {"name": r["name"], "term": p["term"], "term_id": p.get("term_id") or None,
-                "kind": "pattern",
+                "kind": "pattern", "evidence": p.get("evidence") or "profiled",
                 "regex": (r.get("regexMatch") or {}).get("regex", [None])[0],
                 "signature": (r.get("profilePatterns") or [None])[0],
                 "column_hint": _hint(r), "tags": _tags(r), "rule": r}
@@ -258,7 +258,7 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
         r = d["rule"]
         values = [v for v in d["csv"].splitlines()[1:] if v]
         return {"name": r["name"], "term": d["term"], "term_id": d.get("term_id") or None,
-                "kind": "dictionary",
+                "kind": "dictionary", "evidence": d.get("evidence") or "profiled",
                 "values": values[:200], "values_count": len(values),
                 "column_hint": _hint(r), "tags": _tags(r), "rule": r}
 
