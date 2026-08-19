@@ -128,10 +128,21 @@ def _pattern_def(name, description, category, col_rx, signature, content_rx,
             "type": "DataPattern",
             "minSamples": "1",
             "confidenceScore": {"+": parts},
-            "condition": ({"and": [{">=": [{"var": "confidenceScore"}, 0.7]},
-                                   {">": [{"var": "columnCardinality"}, "5"]}]}
-                          if named else
-                          {"and": [{">=": [{"var": "confidenceScore"}, 0.5]}]}),
+            # A name-anchored rule gates HIGHER (0.7, not 0.5) and nothing else
+            # changes, because a DataPattern condition may not mention
+            # columnCardinality. PDC's importer says so outright —
+            #   IllegalStateException: [columnCardinality] variable present in
+            #   rule.condition is not valid
+            # — and then reports the worker COMPLETED with FAILED 1 / TOTAL 1,
+            # so the rejection reads as success unless you open the payload.
+            # The clause was borrowed from the shipped "Personal Data
+            # Identifier" template, which is a DICTIONARY: cardinality is legal
+            # there and illegal here. The constant-column guard it was meant to
+            # provide is therefore not available to patterns; the name-AND-shape
+            # conjunction in the 0.5/0.5 blend against the 0.7 gate is what
+            # keeps such a rule honest.
+            "condition": {"and": [{">=": [{"var": "confidenceScore"},
+                                          0.7 if named else 0.5]}]},
             "actions": _actions(tags, term, term_id),
         }],
         "categories": [category],

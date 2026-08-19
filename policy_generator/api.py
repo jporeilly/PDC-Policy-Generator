@@ -139,8 +139,16 @@ def api_registries() -> dict:
     (nested ~/PDC-Demo clone, sibling checkout, or POLICY_REGISTRY_DIR)."""
     out = []
     for p in registry_mod.discover_registries()[:20]:
+        # A registries directory is shared ground: the Glossary app writes and
+        # rewrites files there, and this app can now delete them, so a path can
+        # vanish between the glob and the stat. A listing that raises over a file
+        # that is already gone is no use to anyone — skip it and list the rest.
+        try:
+            mtime = os.path.getmtime(p)
+        except OSError:
+            continue
         item = {"path": p, "file": os.path.basename(p),
-                "modified": datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y-%m-%d %H:%M"),
+                "modified": datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"),
                 "glossary": None, "concepts": None}
         try:
             with open(p, encoding="utf-8") as f:
@@ -151,6 +159,33 @@ def api_registries() -> dict:
             pass  # unreadable/foreign file: listed, not loadable
         out.append(RegistryListItem(**item))
     return {"registries": [r.model_dump() for r in out]}
+
+
+@app.delete("/api/registries")
+def api_registry_delete(path: str) -> dict:
+    """Delete one discovered Registry file. Scoped hard: the path must be a file
+    this app's own discovery returned, so a stray path can never make this a
+    delete-anything endpoint. The Glossary writes these; a lab machine
+    accumulates one per glossary version, and clearing the stale ones is
+    housekeeping the steward should not have to do in Explorer.
+
+    The loaded Registry stays loaded when its file goes — the working copy lives
+    in memory and may carry reconciled ids that only exist there."""
+    target = os.path.abspath(path or "")
+    known = {os.path.abspath(p) for p in registry_mod.discover_registries()}
+    if target not in known:
+        raise HTTPException(
+            status_code=400,
+            detail="not a discovered Registry file — delete is scoped to the registries "
+                   "this app lists, never an arbitrary path")
+    try:
+        os.remove(target)
+    except OSError as e:
+        raise HTTPException(status_code=502, detail=f"could not delete the Registry file: {e}")
+    remaining = api_registries()
+    return {"deleted": os.path.basename(target),
+            "was_loaded": _state["name"] == os.path.basename(target),
+            **remaining}
 
 
 def _summary_payload() -> RegistrySummary:
@@ -468,6 +503,16 @@ def _live_index(p, prefix):
     return {(m["kind"], m["name"]): m for m in rows if not m.get("builtIn")}
 
 
+def _worker_report(st: dict) -> dict:
+    """What the import worker actually said, beyond COMPLETED. PDC finishes a
+    worker that rejected every file, so the deploy table must be able to show
+    the reason next to the status rather than inferring failure from absence."""
+    md = (st or {}).get("metadata") or {}
+    keep = {k: v for k, v in md.items() if k != "status"}
+    pipe = {k: v for k, v in ((st or {}).get("pipeline") or {}).items() if k != "metadata"}
+    return {k: v for k, v in {**pipe, **keep}.items() if v not in (None, "", [], {})}
+
+
 @app.post("/api/pdc/deploy")
 def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
     """Import the authored method set into PDC programmatically — the path
@@ -518,7 +563,8 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
                 p["base"], tok, w.get("_id"),
                 verify_tls=p["verify_tls"], timeout=body.wait_seconds))
             workers.append({"kind": "DataPattern", "worker_id": w.get("_id"),
-                            "workerName": w.get("workerName"), "status": st.get("status")})
+                            "workerName": w.get("workerName"), "status": st.get("status"),
+                            "report": _worker_report(st)})
         if art["dictionaries"]:
             w = _with_pdc(p, lambda tok: pdc_mod.upload_import(
                 p["base"], tok, "Dictionary", "dictionaries-import.zip",
@@ -527,7 +573,8 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
                 p["base"], tok, w.get("_id"),
                 verify_tls=p["verify_tls"], timeout=body.wait_seconds))
             workers.append({"kind": "Dictionary", "worker_id": w.get("_id"),
-                            "workerName": w.get("workerName"), "status": st.get("status")})
+                            "workerName": w.get("workerName"), "status": st.get("status"),
+                            "report": _worker_report(st)})
     except HTTPException:
         raise
     except Exception as e:

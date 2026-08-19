@@ -136,7 +136,23 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 !if "${HEADERIMAGE}" != ""
   !define MUI_HEADERIMAGE
   !define MUI_HEADERIMAGE_BITMAP  "${HEADERIMAGE}"
+  ; The UNINSTALLER gets it too. MUI only reuses the installer bitmap when this
+  ; is left undefined in some builds - and an uninstaller wearing default art
+  ; while the installer wears ours is exactly the seam a user notices (caught in
+  ; the field: the uninstall dialog still showed the retired red-swirl header).
+  !define MUI_HEADERIMAGE_UNBITMAP "${HEADERIMAGE}"
 !endif
+
+; --- Suite colours -----------------------------------------------------------
+; The apps are black-ground with a Pentaho-red accent; the installer is the
+; first screen anyone sees, so it should not be the one white surface in the
+; set. MUI paints the header band and the welcome/finish pages from these, and
+; the progress log from its own pair (foreground first, then background).
+!define MUI_BGCOLOR   "000000"
+!define MUI_TEXTCOLOR "FFFFFF"
+!define MUI_LICENSEPAGE_BGCOLOR "/windows"
+!define MUI_INSTFILESPAGE_COLORS "FFFFFF 000000"
+!define MUI_INSTFILESPAGE_PROGRESSBAR "smooth"
 
 ; Define registry key to store installer language
 !define MUI_LANGDLL_REGISTRY_ROOT "HKCU"

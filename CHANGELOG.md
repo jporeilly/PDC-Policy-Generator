@@ -1,5 +1,174 @@
 # Changelog
 
+## [1.10.6] — 2026-08-19
+
+### Changed — the swirl retires: Pentaho, capital P, white on black
+
+The approved 2026 rebrand, ported from the Glossary Generator (1.38.28) so the
+whole suite matches. Branding verified against the live pentaho.com and
+user-approved from rendered previews:
+
+- **App icon**: black tile, white capital P, short brand-red accent bar, the
+  blue shield-check badge kept (a word is mush at 24 px; the badge is what
+  tells the suite's taskbar pins apart). Full Tauri icon set regenerated.
+- **Installer art**: NSIS header and welcome sidebar go black — white
+  "Pentaho" wordmark, red accent bar, the P-tile with the shield badge on the
+  sidebar.
+- **Splash**: black field with a faint red floor-glow, white Pentaho wordmark
+  over "Policy Generator", and the animated red bar inherits the swirl's
+  alive-signal job — draws in on launch, breathes faster while more startup
+  checks remain.
+
+### Changed — the session comes before the Registry, and ✕ means delete
+
+Both field-caught in the same pass.
+
+- **Connect to PDC moved above Load a Classification Registry.** Every stage
+  after Author reads the live catalog, so establishing the session is the first
+  act on the page, not a card underneath the table you already used.
+- **The registry-row delete is now the Glossary's `✕`** on a ghost button
+  (`HomePage`'s saved-glossary and version rows), replacing the bin emoji — one
+  habit across both apps. Only the hover tint is app-local: a destructive
+  control should say so before it is clicked.
+
+### Changed — the installer wears the suite's black
+
+The uninstall dialog was still showing the retired red-swirl header, because
+the black NSIS art (rebrand `ff44272`) reached the installer while the
+uninstaller kept the default. `MUI_HEADERIMAGE_UNBITMAP` now points at the same
+bitmap, and `MUI_BGCOLOR` / `MUI_TEXTCOLOR` paint the header band and the
+Welcome/Finish pages black with white text; the progress log runs white on
+black. MUI paints only those surfaces from its colour defines — the inner page
+bodies still follow Windows' dialog colours, which would need per-control
+`SetCtlColors` work to change.
+
+## [1.10.5] — 2026-08-18
+
+### Added — Report: one account of the whole pipeline
+
+`ReportPage` compiles the contract, the authored set and the live catalog into a
+single read: concepts and resolved ids, methods by **evidence** (profiled /
+recognised / curated / name-anchored, each with what it means), the concepts
+that were NOT authored grouped by reason, and the drift verdicts. A verdict line
+says whether deployed and governed agree — and says "unknown, no session"
+rather than implying agreement when it cannot check. **Export standalone HTML**
+writes the whole thing as one self-contained file.
+
+It is a sidebar page, not a sixth numbered stage: the workflow is five stages
+and a report is something you read at any point.
+
+### Added — delete a Registry from the Load page
+
+`DELETE /api/registries?path=` removes one discovered Registry file, hard-scoped
+to paths `discover_registries()` returned, so a stray path can never make it a
+delete-anything endpoint. A row-level control with an explicit confirm; the
+loaded Registry stays loaded when its file goes, because the working copy lives
+in memory and may carry reconciled ids that exist nowhere else.
+
+The listing was hardened in the same pass: a registries directory is shared with
+the Glossary app, so a file can vanish between the glob and the stat — the
+listing now skips what is already gone instead of raising over it.
+
+### Changed — Reconcile stops asking for a connection and starts showing progress
+
+The connect card belongs to Load (1.10.3), so Reconcile no longer carries a
+second copy. In its place: a line naming the session it is working against with
+the token's remaining life, or, when there is none, the way back to Load. The
+batched reconcile now draws a real progress bar with a live line — "reconciling
+50 of 142 (35%)", plus verified / resolved / mismatch / missing so far — and the
+bar stays put when it finishes instead of vanishing.
+
+### Changed — the handoff diagram carries the contract's contents
+
+It was a 560x92 strip that could only name four boxes ("bit squashed and needs
+more details"). Now 880x300, with the Registry's actual payload spelled out
+(term + minted id, governed tags, sensitivity/category/sources, detection seeds
+labelled by evidence, detection_intent), this app's three verbs against it, and
+the dashed return path showing Drift reading PDC back. 67 tests.
+
+## [1.10.4] — 2026-08-18
+
+### Fixed — the condition variable that cost 81 patterns
+
+Live-bisected against the lab after a 115-method deploy landed 34. A single
+name-anchored rule, alone in its own zip, was rejected:
+
+    java.lang.IllegalStateException: [columnCardinality] variable present in
+    rule.condition is not valid
+      at PatternManagerHelperKt.isValidCondition(PatternManagerHelper.kt:140)
+      at PatternImporter.processJsonFile(PatternImporter.kt:95)
+      at PatternImporter.processZipFile(PatternImporter.kt:161)
+
+Two lessons, one line of code:
+
+- **`columnCardinality` is legal in a Dictionary condition and illegal in a
+  DataPattern one.** The clause was copied from PDC's shipped "Personal Data
+  Identifier" template — a dictionary — when name-anchored rules were added in
+  1.10.1. Those rules now gate on `confidenceScore >= 0.7` alone. The
+  constant-column guard is simply not available to patterns; the name-AND-shape
+  conjunction (0.5/0.5 against a 0.7 gate) is what keeps the rule honest.
+- **Validation is per file, but the failure is per archive.** The exception
+  escapes `processZipFile`, so the importer abandons every remaining file. Rule
+  8 of 88 was name-anchored; patterns 8-88 never got read, including profiled
+  ones that were perfectly valid.
+
+### Added — the deploy stage reports what the worker said
+
+`worker_status()` returns the whole `pipeline` payload rather than
+`metadata.status` alone, and each Deploy worker row carries a `report`. PDC
+finishes an import worker that rejected every file: status `COMPLETED`,
+statistics `FAILED 1 / TOTAL 1`. Reading one field made a total failure look
+like a success, and the app inferred the truth only by absence from a listing
+that was itself capped (see 1.10.2). 65 tests.
+
+## [1.10.3] — 2026-08-18
+
+### Fixed — the connection was locked behind a page you could not open
+
+Field-caught: "on the Load page could define a connection to PDC.. cant get to
+the Reconcile page." Connecting is a setup act, not a reconcile act, but the
+form only existed on Reconcile — and Reconcile is gated on a loaded Registry.
+Restart the server (or just refresh) and the session was gone with no reachable
+way to make a new one.
+
+- **`components/PdcConnect.jsx`**: the session card, extracted from
+  ReconcilePage and now rendered on **Load** as well. One component, one piece
+  of App state — connecting in either place lights up the whole workflow.
+- **The workflow adopts server state on boot.** The Registry and the PDC
+  session live in the backend process, but the UI only learned about them by
+  performing the action itself, so a refresh showed an empty workflow with
+  every step past Load greyed out. App now reads `/api/summary` and
+  `/api/pdc/status` at startup and adopts what is already there.
+
+## [1.10.2] — 2026-08-18
+
+### Fixed — the method listing is paged (it was blind past 100 rows)
+
+Found by deploying 115 methods to the lab and being unable to say how many
+landed. PDC's `DictionariesMany` / `DataPatternsMany` apply a server-side
+default ceiling of 100 rows to a query that asks for no limit, and return an
+arbitrary page rather than an error. `list_methods` then filtered by prefix in
+Python — over that page. With 95 built-in dictionaries already in the catalog,
+27 imported ones could only ever appear as 5.
+
+Everything that decides what is or is not deployed reads through this one
+call: deploy's post-import verification, the drift comparison, and the scoped
+retire. The retire is the sharp end — it can only remove what it can see, so
+the app could not reliably clean up its own deployment.
+
+- `pdc._list_all()` pages each collection with `limit` / `skip` and stops on an
+  EMPTY page, never a short one: a server that caps `limit` below what we ask
+  returns a short page with more rows waiting, and `skip` advances by what
+  arrived rather than what was requested.
+- Two guards: a page cap, and a repeat-id check so a server that ignores
+  `skip` is taken once instead of paged forever.
+- A schema without `limit`/`skip` falls back to the old one-shot read rather
+  than failing — it under-reports, which is the bug, so the fallback is
+  narrow: only an argument error triggers it, any other GraphQL error raises.
+- The prefix filter now runs over the complete collection.
+
+64 tests.
+
 ## [1.10.1] — 2026-08-18
 
 ### Added — name-anchored seeds, and an Evidence column that says so

@@ -318,3 +318,26 @@ class TestDriftEndpoint:
         assert api_client.post("/api/pdc/drift", json={}).status_code == 400
         client = loaded_client(api_client, registry_file)
         assert client.post("/api/pdc/drift", json={}).status_code == 400
+
+class TestRegistryDelete:
+    """Deleting a Registry file (1.10.5). Scoped to discovered files so a stray
+    path can never turn this into a delete-anything endpoint."""
+
+    def test_deletes_a_discovered_registry(self, api_client, registry_file, monkeypatch):
+        from policy_generator import api as api_mod
+        monkeypatch.setattr(api_mod.registry_mod, "discover_registries",
+                            lambda: [str(registry_file)])
+        res = api_client.request("DELETE", f"/api/registries?path={registry_file}")
+        assert res.status_code == 200, res.text
+        assert res.json()["deleted"] == registry_file.name
+        assert not registry_file.exists()
+
+    def test_refuses_a_path_it_never_listed(self, api_client, tmp_path, monkeypatch):
+        from policy_generator import api as api_mod
+        monkeypatch.setattr(api_mod.registry_mod, "discover_registries", lambda: [])
+        victim = tmp_path / "precious.json"
+        victim.write_text("{}", encoding="utf-8")
+        res = api_client.request("DELETE", f"/api/registries?path={victim}")
+        assert res.status_code == 400
+        assert "scoped" in res.json()["detail"]
+        assert victim.exists(), "an unlisted path must survive"

@@ -9,9 +9,8 @@ const STATUS = {
 
 const BATCH = 25
 
-export default function ReconcilePage({ summary, onSummary, pdc, onPdc }) {
+export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
   // pdc (the connected-session info) lives in App state: Deploy and Drift gate on it
-  const [form, setForm] = useState({ base_url: '', username: '', password: '', token: '', verify_tls: false })
   const [rows, setRows] = useState([])
   const [counts, setCounts] = useState(null)
   const [progress, setProgress] = useState(null) // {done, total}
@@ -29,18 +28,6 @@ export default function ReconcilePage({ summary, onSummary, pdc, onPdc }) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || res.statusText)
     return data
-  }
-
-  async function connect() {
-    setBusy(true)
-    setError(null)
-    try {
-      onPdc(await post('/api/pdc/connect', form))
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
   }
 
   async function reconcile() {
@@ -118,48 +105,23 @@ export default function ReconcilePage({ summary, onSummary, pdc, onPdc }) {
 
   return (
     <>
-      <section className="card">
-        <header>
-          <h2>Connect to PDC</h2>
-          {pdc && (
-            <span className="badge good" title={`roles: ${(pdc.roles ?? []).join(', ')}`}>
-              ✓ {pdc.username ?? 'connected'} @ {pdc.base}
-            </span>
-          )}
-        </header>
+      {pdc ? (
         <p className="hint-line">
-          The token lives in memory for this session only; the password is never stored.
+          Working against <b>{pdc.username ?? 'PDC'}</b> @ <b>{pdc.base}</b>
+          {pdc.expires_in != null && <> · token good for {Math.round(pdc.expires_in / 60)} min</>}
+          {' — '}connect or switch session on the <button className="link-inline"
+            onClick={() => onNavigate?.('load')}>Load page</button>.
         </p>
-        <div className="form-grid">
-          <label>Base URL
-            <input placeholder="https://192.168.1.200" value={form.base_url}
-                   onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
-          </label>
-          <label>Username
-            <input value={form.username}
-                   onChange={(e) => setForm({ ...form, username: e.target.value })} />
-          </label>
-          <label>Password
-            <input type="password" value={form.password}
-                   onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          </label>
-          <label>Bearer token (instead of credentials)
-            <input value={form.token}
-                   onChange={(e) => setForm({ ...form, token: e.target.value })} />
-          </label>
-        </div>
-        <div className="actions">
-          <label className="check">
-            <input type="checkbox" checked={form.verify_tls}
-                   onChange={(e) => setForm({ ...form, verify_tls: e.target.checked })} />
-            Verify TLS certificate
-          </label>
-          <button className="primary" onClick={connect} disabled={busy}>
-            {busy ? 'Connecting…' : pdc ? '↻ Reconnect' : 'Connect'}
-          </button>
-        </div>
-        {error && <div className="error">{error}</div>}
-      </section>
+      ) : (
+        <section className="card">
+          <p className="hint-line">
+            ⚠ No PDC session. Reconcile reads live term ids, so it needs one —
+            <button className="link-inline" onClick={() => onNavigate?.('load')}>
+              connect on the Load page
+            </button>, then come back.
+          </p>
+        </section>
+      )}
 
       <section className="card">
         <header>
@@ -179,8 +141,24 @@ export default function ReconcilePage({ summary, onSummary, pdc, onPdc }) {
           </div>
         </header>
         {progress && (
-          <div className="progress-track">
-            <div className="progress-bar" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+          <div className="recon-progress">
+            <div className="progress-track">
+              <div className={`progress-bar${busy ? '' : ' done'}`}
+                   style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} />
+            </div>
+            <p className="notes" aria-live="polite">
+              {busy
+                ? <>Reconciling <b>{progress.done}</b> of <b>{progress.total}</b> concept(s)
+                    {' '}({Math.round((progress.done / progress.total) * 100)}%) — looking each term
+                    up in PDC in batches of {BATCH}.</>
+                : <>Reconciled <b>{progress.done}</b> of <b>{progress.total}</b> concept(s).</>}
+              {rows.length > 0 && (
+                <> Verified {rows.filter((r) => r.status === 'verified').length},
+                  {' '}resolved {rows.filter((r) => r.status === 'resolved').length},
+                  {' '}mismatch {rows.filter((r) => r.status === 'mismatch').length},
+                  {' '}missing {rows.filter((r) => r.status === 'missing').length} so far.</>
+              )}
+            </p>
           </div>
         )}
         {counts && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import PdcConnect from '../components/PdcConnect.jsx'
 
-export default function LoadPage({ summary, onLoaded }) {
+export default function LoadPage({ summary, onLoaded, pdc, onPdc }) {
   const [registries, setRegistries] = useState([])
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -11,6 +12,30 @@ export default function LoadPage({ summary, onLoaded }) {
       .then((b) => setRegistries(b.registries ?? []))
       .catch(() => {})
   }, [])
+
+  async function deletePath(r) {
+    // The row click loads; deleting must be an explicit, named act — the file
+    // is the Glossary's output and there is no undo.
+    if (!window.confirm(`Delete the Registry file ${r.file}?
+` +
+        `${r.glossary ?? 'unreadable'} · ${r.concepts ?? '—'} concept(s)
+
+` +
+        'The file is removed from disk. A Registry already loaded stays loaded ' +
+        '(the working copy lives in memory, reconciled ids included).')) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/registries?path=${encodeURIComponent(r.path)}`, { method: 'DELETE' })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.detail || res.statusText)
+      setRegistries(body.registries ?? [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function loadPath(path) {
     setBusy(true)
@@ -46,6 +71,14 @@ export default function LoadPage({ summary, onLoaded }) {
 
   return (
     <>
+      <PdcConnect
+        pdc={pdc}
+        onPdc={onPdc}
+        hint={'Connect first: Reconcile, Deploy and Drift all read the live catalog, and the '
+              + 'session survives every page. The token lives in memory for this session only '
+              + 'and the password is never stored.'}
+      />
+
       <section className="card">
         <header>
           <h2>Load a Classification Registry</h2>
@@ -71,9 +104,11 @@ export default function LoadPage({ summary, onLoaded }) {
                 <colgroup>
                   <col className="c-file" /><col className="c-gloss" />
                   <col className="c-concepts" /><col className="c-mod" />
+                  <col style={{ width: '2.6rem' }} />
                 </colgroup>
                 <thead>
-                  <tr><th>File</th><th>Glossary</th><th className="num">Concepts</th><th>Modified</th></tr>
+                  <tr><th>File</th><th>Glossary</th><th className="num">Concepts</th><th>Modified</th>
+                      <th><span className="sr-only">Delete</span></th></tr>
                 </thead>
                 <tbody>
                   {registries.map((r) => (
@@ -85,6 +120,11 @@ export default function LoadPage({ summary, onLoaded }) {
                       <td>{r.glossary ?? <span className="notes">unreadable</span>}</td>
                       <td className="num">{r.concepts ?? '—'}</td>
                       <td className="notes">{r.modified}</td>
+                      <td>
+                        <button className="ghost" title={`Delete ${r.file} from disk`}
+                                aria-label={`Delete ${r.file}`} disabled={busy}
+                                onClick={(e) => { e.stopPropagation(); deletePath(r) }}>✕</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -116,9 +156,13 @@ function HandoffDiagram() {
     <div className="ho-wrap">
       <svg
         className="ho"
-        viewBox="0 0 560 92"
-        aria-label="Handoff: the Glossary Generator writes the Classification Registry at Generate;
-          the Policy Generator reads it and authors Data Identification methods in PDC."
+        viewBox="0 0 880 300"
+        aria-label="Handoff: the Glossary Generator writes the Classification Registry at Generate.
+          The Registry carries one governed row per concept — term and minted id, governed tags,
+          and detection seeds labelled with the evidence behind them. The Policy Generator reads
+          those rows and authors Data Identification methods in PDC; Reconcile binds ids against
+          the live catalog, Deploy imports the set, and Drift compares what is deployed against
+          what the Registry governs."
       >
         <defs>
           <marker id="ho-arrowhead" viewBox="0 0 8 8" refX="7" refY="4"
@@ -128,34 +172,66 @@ function HandoffDiagram() {
           </marker>
         </defs>
 
-        <path className="ho-arrow" d="M116 46 H138" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="127" y="36" textAnchor="middle">writes</text>
-        <path className="ho-arrow" d="M278 46 H300" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="289" y="36" textAnchor="middle">read by</text>
-        <path className="ho-arrow" d="M412 46 H434" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="423" y="36" textAnchor="middle">authors</text>
+        {/* --- the three actors, left to right --- */}
+        <g className="ho-node">
+          <rect x="8" y="40" width="150" height="58" rx="8" />
+          <text x="83" y="63" textAnchor="middle">Glossary</text>
+          <text x="83" y="81" textAnchor="middle">Generator</text>
+          <text className="ho-sub" x="83" y="115" textAnchor="middle">scan, review, govern</text>
+        </g>
+
+        <path className="ho-arrow" d="M162 69 H206" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="184" y="59" textAnchor="middle">writes at Generate</text>
+
+        <g className="ho-node ho-contract">
+          <rect x="210" y="26" width="240" height="182" rx="10" />
+          <text x="330" y="52" textAnchor="middle">Classification Registry</text>
+          <text className="ho-sub" x="330" y="70" textAnchor="middle">classification-registry/1</text>
+          <line className="ho-rule" x1="228" y1="82" x2="432" y2="82" />
+          <text className="ho-item" x="228" y="102">term name + minted id</text>
+          <text className="ho-item" x="228" y="122">governed tags (allow-list)</text>
+          <text className="ho-item" x="228" y="142">sensitivity, category, sources</text>
+          <text className="ho-item" x="228" y="162">detection seeds, each labelled</text>
+          <text className="ho-seed" x="240" y="180">profiled · recognised · curated · name-anchored</text>
+          <text className="ho-item" x="228" y="200">detection_intent (mapping-only)</text>
+        </g>
+
+        <path className="ho-arrow" d="M454 69 H498" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="476" y="59" textAnchor="middle">read by</text>
 
         <g className="ho-node">
-          <rect x="2" y="26" width="114" height="40" rx="8" />
-          <text x="59" y="43" textAnchor="middle" dominantBaseline="middle">Glossary</text>
-          <text x="59" y="57" textAnchor="middle" dominantBaseline="middle">Generator</text>
+          <rect x="502" y="40" width="150" height="58" rx="8" />
+          <text x="577" y="63" textAnchor="middle">Policy</text>
+          <text x="577" y="81" textAnchor="middle">Generator</text>
+          <text className="ho-sub" x="577" y="115" textAnchor="middle">authors, never re-decides</text>
         </g>
-        <g className="ho-node ho-contract">
-          <rect x="140" y="26" width="138" height="40" rx="8" />
-          <text x="209" y="43" textAnchor="middle" dominantBaseline="middle">Classification</text>
-          <text x="209" y="57" textAnchor="middle" dominantBaseline="middle">Registry</text>
-          <text className="ho-sub" x="209" y="80" textAnchor="middle">the contract — one governed row per concept</text>
-        </g>
+
+        <path className="ho-arrow" d="M656 69 H700" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="678" y="59" textAnchor="middle">authors</text>
+
         <g className="ho-node">
-          <rect x="302" y="26" width="110" height="40" rx="8" />
-          <text x="357" y="43" textAnchor="middle" dominantBaseline="middle">Policy</text>
-          <text x="357" y="57" textAnchor="middle" dominantBaseline="middle">Generator</text>
+          <rect x="704" y="40" width="168" height="58" rx="8" />
+          <text x="788" y="63" textAnchor="middle">Data Identification</text>
+          <text className="ho-sub" x="788" y="81" textAnchor="middle">patterns + dictionaries in PDC</text>
         </g>
-        <g className="ho-node">
-          <rect x="436" y="26" width="122" height="40" rx="8" />
-          <text x="497" y="43" textAnchor="middle" dominantBaseline="middle">Data Identification</text>
-          <text className="ho-sub" x="497" y="57" textAnchor="middle" dominantBaseline="middle">in PDC</text>
+
+        {/* --- what this app does with the contract, under the actors --- */}
+        <g className="ho-stage">
+          <text className="ho-stage-n" x="502" y="150">Author</text>
+          <text className="ho-item" x="502" y="168">one method per seed, tags and</text>
+          <text className="ho-item" x="502" y="184">term binding copied verbatim</text>
+
+          <text className="ho-stage-n" x="502" y="212">Reconcile</text>
+          <text className="ho-item" x="502" y="230">bind each term by id, not name</text>
+
+          <text className="ho-stage-n" x="502" y="258">Deploy → Drift</text>
+          <text className="ho-item" x="502" y="276">import the set, then prove deployed</text>
+          <text className="ho-item" x="502" y="292">and governed still agree</text>
         </g>
+
+        {/* Drift is the loop that closes it: PDC read back against the contract */}
+        <path className="ho-arrow ho-loop" d="M788 106 V246 H470" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="640" y="240" textAnchor="middle">Drift reads PDC back</text>
       </svg>
     </div>
   )

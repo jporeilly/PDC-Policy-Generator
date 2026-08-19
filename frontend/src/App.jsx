@@ -6,6 +6,7 @@ import AuthorPage from './pages/AuthorPage.jsx'
 import ReconcilePage from './pages/ReconcilePage.jsx'
 import DeployPage from './pages/DeployPage.jsx'
 import DriftPage from './pages/DriftPage.jsx'
+import ReportPage from './pages/ReportPage.jsx'
 
 /* Nav icons — the suite's shared visual family (24 viewBox, 1.7 stroke),
    same set style as PDC-Insights' shell. */
@@ -15,6 +16,7 @@ const ICONS = {
   reconcile: <><path d="M10.6 13.4a4.3 4.3 0 0 0 6.1 0l2.8-2.8a4.3 4.3 0 0 0-6.1-6.1L11.7 6.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /><path d="M13.4 10.6a4.3 4.3 0 0 0-6.1 0l-2.8 2.8a4.3 4.3 0 0 0 6.1 6.1l1.7-1.7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /></>,
   deploy: <><path d="M12 15V4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /><path d="m7.5 8.5 4.5-4 4.5 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" /><path d="M4.5 14.5V17a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /></>,
   drift: <><path d="M12 4v16M8.5 20h7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /><path d="M12 6H6l-2.5 5a3 3 0 0 0 5 0L6 6m12 0h-6m6 0 -2.5 5a3 3 0 0 0 5 0L18 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" /></>,
+  report: <><path d="M6 3.5h8.5L19 8v12.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" fill="none" /><path d="M14 3.5V8h5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" fill="none" /><path d="M8.5 17v-3.5m3.5 3.5v-6m3.5 6v-2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /></>,
   settings: <><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" fill="none" /><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.1 2.1m10 10 2.1 2.1M19.1 4.9 17 7m-10 10-2.1 2.1" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" /></>,
 }
 
@@ -33,6 +35,8 @@ const STEPS = [
     tip: 'Import the authored set into PDC over the import API, verify every method landed, and re-stamp the reconciled term ids. Needs a connected PDC and reconciled ids.' },
   { id: 'drift', label: 'Drift', hint: 'deployed vs governed',
     tip: 'Compare every deployed method against the Registry: tags, term bindings, regexes, dictionary counts. Needs a loaded Registry and a PDC session.' },
+  { id: 'report', label: 'Report', hint: 'contract vs deployed', standalone: true,
+    tip: 'One account of the whole pipeline: what the contract governs, what was authored from it, and what is live in PDC. Exportable as standalone HTML.' },
 ]
 
 export default function App() {
@@ -50,6 +54,21 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  // Adopt whatever the server already holds. Registry and PDC session live in
+  // the backend process, so a browser refresh (or a reconnect after a restart)
+  // used to show an empty workflow while the server was fully loaded — with
+  // every step past Load greyed out and no way back to the connect form.
+  useEffect(() => {
+    fetch('/api/summary')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => s && s.concepts != null && setSummary(s))
+      .catch(() => {})
+    fetch('/api/pdc/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => p && p.connected && setPdc(p))
+      .catch(() => {})
+  }, [])
+
   // Per-step gates, consistent with the ones the pages enforce server-side:
   // Author/Reconcile need a Registry; Deploy additionally needs a PDC session
   // and at least one reconciled term id; Drift needs Registry + PDC session.
@@ -59,6 +78,7 @@ export default function App() {
     !!summary,
     !!summary && !!pdc && (summary.resolved_term_ids ?? 0) > 0,
     !!summary && !!pdc,
+    !!summary,
   ]
   const crumbGroup = showSettings ? 'Configure' : 'Workflow'
   const crumbLabel = showSettings ? 'Settings' : STEPS[step].label
@@ -140,7 +160,7 @@ export default function App() {
                 quietly diverge from what the glossary governs.
               </p>
               <ol className="stepper">
-                {STEPS.map((s, i) => {
+                {STEPS.filter((s) => !s.standalone).map((s, i) => {
                   const state = i < step ? 'done' : i === step ? 'active' : stepReady[i] ? 'ready' : 'locked'
                   return (
                     <li key={s.label} className={state}>
@@ -152,7 +172,9 @@ export default function App() {
                           <span className="step-hint">{s.hint}</span>
                         </span>
                       </button>
-                      {i < STEPS.length - 1 && <span className="bar" aria-hidden="true" />}
+                      {i < STEPS.filter((x) => !x.standalone).length - 1 && (
+                        <span className="bar" aria-hidden="true" />
+                      )}
                     </li>
                   )
                 })}
@@ -162,12 +184,14 @@ export default function App() {
                 <LoadPage
                   summary={summary}
                   onLoaded={(s) => { setSummary(s); setStep(1) }}
+                  pdc={pdc}
+                  onPdc={setPdc}
                 />
               )}
               {step === 1 && summary && <AuthorPage summary={summary} />}
               {step === 2 && summary && (
                 <ReconcilePage summary={summary} onSummary={setSummary}
-                               pdc={pdc} onPdc={setPdc} />
+                               pdc={pdc} onNavigate={() => setStep(0)} />
               )}
               {step === 3 && summary && (
                 <DeployPage summary={summary} pdc={pdc} onPdc={setPdc} />
@@ -175,6 +199,7 @@ export default function App() {
               {step === 4 && summary && (
                 <DriftPage summary={summary} pdc={pdc} onPdc={setPdc} />
               )}
+              {step === 5 && summary && <ReportPage summary={summary} pdc={pdc} />}
             </>
           )}
         </div>

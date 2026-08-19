@@ -50,10 +50,22 @@ class TestBlend:
         weights = [float(p["*"][1]) for p in rule["confidenceScore"]["+"]]
         assert max(weights) < float(gate) <= sum(weights)
 
-    def test_cardinality_guard_rides_along(self):
+    def test_the_condition_names_no_variable_pdc_rejects(self):
+        """Live-caught: PDC's pattern importer refuses a condition mentioning
+        columnCardinality — IllegalStateException, one rejected file, and a
+        worker that still reports COMPLETED. The clause came from the shipped
+        Personal Data Identifier template, which is a dictionary; cardinality is
+        legal there and illegal in a DataPattern. 81 of 88 patterns were lost to
+        it, because the importer abandons the whole zip at the first bad file."""
         rule, _ = _rule(NAMED)
-        guard = [c for c in rule["condition"]["and"] if ">" in c]
-        assert guard and guard[0][">"][0]["var"] == "columnCardinality"
+        assert rule["condition"] == {"and": [{">=": [{"var": "confidenceScore"}, 0.7]}]}
+        assert "columnCardinality" not in str(rule["condition"])
+
+    def test_the_gate_is_higher_than_the_stock_one(self):
+        named, _ = _rule(NAMED)
+        stock, _ = _rule(PROFILED)
+        assert named["condition"]["and"][0][">="][1] == 0.7
+        assert stock["condition"]["and"][0][">="][1] == 0.5
 
     def test_signature_rides_at_weight_zero(self):
         rule, pat = _rule(dict(NAMED, signature="dddd-dd-dd"))

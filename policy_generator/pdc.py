@@ -175,18 +175,63 @@ def graphql(base_url, token, query, variables=None, verify_tls=True, timeout=30)
     return out.get("data") or {}
 
 
+_PAGE_SIZE = 200        # what we ask for; PDC may serve less per page
+_MAX_PAGES = 200        # runaway guard — 200 pages is far past any real catalog
+
+
+def _list_all(base_url, token, field, verify_tls=True, timeout=30, page_size=_PAGE_SIZE):
+    """Every row of one *Many collection, paged.
+
+    PDC's *Many resolvers apply a SERVER-SIDE default ceiling — observed at
+    100 rows — and answer a limitless query with an arbitrary page rather than
+    an error. That silence cost a deploy: with 95 built-in dictionaries already
+    in the catalog, a 27-method import could only ever surface as 5, and the
+    verification, drift and (worst) the scoped retire all read through here.
+
+    Paging stops on an EMPTY page, never on a short one: a server that caps
+    `limit` below what we ask returns a short page with more rows waiting. Two
+    guards keep a hostile server from spinning us: a page cap, and a repeat
+    check for a server that ignores `skip` and re-serves page one forever.
+    """
+    q = ("query($limit: Int, $skip: Int) { %s(limit: $limit, skip: $skip) "
+         "{ _id name builtIn } }" % field)
+    out, seen, skip = [], set(), 0
+    for _ in range(_MAX_PAGES):
+        try:
+            page = (graphql(base_url, token, q,
+                            variables={"limit": page_size, "skip": skip},
+                            verify_tls=verify_tls, timeout=timeout) or {}).get(field) or []
+        except RuntimeError as e:
+            # An older schema without limit/skip: fall back to the one-shot
+            # read rather than failing. It under-reports — that is the bug this
+            # function exists to fix — so say so where a caller can see it.
+            if "limit" not in str(e) and "skip" not in str(e):
+                raise
+            data = graphql(base_url, token, "{ %s { _id name builtIn } }" % field,
+                           verify_tls=verify_tls, timeout=timeout)
+            return list((data or {}).get(field) or [])
+        if not page:
+            break
+        fresh = [m for m in page if (m or {}).get("_id") not in seen]
+        if not fresh:
+            break                       # skip ignored — stop rather than loop
+        seen.update(m.get("_id") for m in fresh)
+        out.extend(fresh)
+        skip += len(page)
+    return out
+
+
 def list_methods(base_url, token, prefix=None, verify_tls=True, timeout=30):
     """List Data Identification methods (dictionaries + patterns). When
        `prefix` is given, only methods whose name starts with it are returned —
        the guard that keeps a retire scoped to the app's own authored set.
-       Each row: {kind, _id, name, builtIn}."""
-    data = graphql(
-        base_url, token,
-        "{ DictionariesMany { _id name builtIn } DataPatternsMany { _id name builtIn } }",
-        verify_tls=verify_tls, timeout=timeout)
+       Each row: {kind, _id, name, builtIn}.
+
+       The prefix filter runs here, over the COMPLETE collection: filtering a
+       capped page is how a partial deploy read as a total failure."""
     rows = []
     for kind, fld in (("Dictionary", "DictionariesMany"), ("DataPattern", "DataPatternsMany")):
-        for m in (data.get(fld) or []):
+        for m in _list_all(base_url, token, fld, verify_tls=verify_tls, timeout=timeout):
             name = m.get("name") or ""
             if prefix and not name.startswith(prefix):
                 continue
@@ -281,9 +326,15 @@ def worker_status(base_url, token, worker_id, verify_tls=True, timeout=30):
         "query($id: MongoID!) { WorkersById(_id: $id) { workerName pipeline } }",
         variables={"id": worker_id}, verify_tls=verify_tls, timeout=timeout)
     w = data.get("WorkersById") or {}
-    md = ((w.get("pipeline") or {}).get("metadata") or {})
-    return {"status": md.get("status"), "label": (w.get("pipeline") or {}).get("label"),
-            "workerName": w.get("workerName")}
+    pipeline = w.get("pipeline") or {}
+    md = pipeline.get("metadata") or {}
+    # The WHOLE pipeline travels back, not just the status field. A PDC import
+    # worker reports COMPLETED after rejecting every file in the zip, so the
+    # status alone cannot tell success from silent total failure — the detail
+    # that names the rejected file lives in the rest of this payload, and we
+    # spent an afternoon guessing at what it would have told us.
+    return {"status": md.get("status"), "label": pipeline.get("label"),
+            "workerName": w.get("workerName"), "metadata": md, "pipeline": pipeline}
 
 
 def wait_worker(base_url, token, worker_id, verify_tls=True, timeout=120, poll=2.0):
