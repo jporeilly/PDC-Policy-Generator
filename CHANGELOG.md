@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.10.7] — 2026-08-19
+
+### Fixed — the black stays in the art; the page body goes back to white
+
+1.10.6's `MUI_BGCOLOR`/`MUI_TEXTCOLOR` painted the ENTIRE welcome/finish
+dialog black — checkboxes and all — which read as a broken dialog rather
+than brand (field: "the non icon side needs to be white"). The colour
+defines are gone: the black now lives only where the art puts it — the
+header band and the welcome sidebar bitmaps — and every page body follows
+Windows' standard dialog colours again.
+
 ## [1.10.6] — 2026-08-19
 
 ### Changed — the swirl retires: Pentaho, capital P, white on black

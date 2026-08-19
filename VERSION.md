@@ -1,6 +1,6 @@
 # Version
 
-**1.10.6** — 2026-08-19
+**1.10.7** — 2026-08-19
 
 Connect first, and delete with the same ✕ the Glossary uses. The PDC session
 card now sits ABOVE the Registry list on Load — Reconcile, Deploy and Drift all

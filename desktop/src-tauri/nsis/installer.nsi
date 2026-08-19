@@ -144,14 +144,11 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 !endif
 
 ; --- Suite colours -----------------------------------------------------------
-; The apps are black-ground with a Pentaho-red accent; the installer is the
-; first screen anyone sees, so it should not be the one white surface in the
-; set. MUI paints the header band and the welcome/finish pages from these, and
-; the progress log from its own pair (foreground first, then background).
-!define MUI_BGCOLOR   "000000"
-!define MUI_TEXTCOLOR "FFFFFF"
-!define MUI_LICENSEPAGE_BGCOLOR "/windows"
-!define MUI_INSTFILESPAGE_COLORS "FFFFFF 000000"
+; The BLACK lives in the art alone: the header band and the welcome sidebar
+; bitmaps. The page bodies stay Windows-white — MUI_BGCOLOR paints the ENTIRE
+; welcome/finish dialog (checkboxes included), which read as a broken dialog
+; rather than brand (field: "the non icon side needs to be white"). 1.10.6
+; tried the all-black page and 1.10.7 walked it back.
 !define MUI_INSTFILESPAGE_PROGRESSBAR "smooth"
 
 ; Define registry key to store installer language
