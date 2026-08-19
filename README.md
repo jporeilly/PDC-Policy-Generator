@@ -18,6 +18,18 @@ authors import-ready Data Patterns and Dictionaries from the scan's evidence,
 each stamping governed tags and binding the governed business term — so what
 PDC *identifies* can never quietly diverge from what the glossary *governs*.
 
+> **Which "policy"? PDC uses the word twice, and this app works entirely in
+> the first sense.** A **Data Identification policy** is just patterns +
+> dictionaries — the method set selected for an identification run; it
+> executes, and it is what this app authors, deploys and drift-checks. A
+> **Governance Policy** is a written rule with guardrails — status, version,
+> effective dates, steward, owner — that declares intent and never executes;
+> it lives on PDC's Policy page with its measurable **Standards**, and this
+> app does not author those documents. The two meet where they should: the
+> methods this app deploys are the *controls that measure* a Governance
+> Policy's standards. (A proposed bridge into the second sense is specced in
+> [docs/SPEC-policy-advisor.md](docs/SPEC-policy-advisor.md).)
+
 It is the second half of a two-app governance pipeline, and it is
 **deterministic and offline — no LLM, no database, no network** in the author
 stage: every regex and reference list it emits was induced from profiled data
