@@ -337,6 +337,89 @@ def worker_status(base_url, token, worker_id, verify_tls=True, timeout=30):
             "workerName": w.get("workerName"), "metadata": md, "pipeline": pipeline}
 
 
+def profiled_at(base_url, token, entity_id, version="v3", verify_tls=True, timeout=20):
+    """When PDC last profiled an entity (system.profiledAt), or None.
+
+    Identification matches PATTERNS against the stored profile, not against the
+    table as it stands. Rebuild an estate and every pattern quietly stops
+    matching until a fresh profile exists — no error, no warning, methods that
+    tag nothing. Live-proven 2026-08-20: identical methods tagged 9 columns in a
+    freshly profiled table and 1 in a stale one, in the same job.
+    """
+    ent = get_entity(base_url, token, entity_id, version=version,
+                     verify_tls=verify_tls, timeout=timeout)
+    sysblk = ent.get("system") if isinstance(ent.get("system"), dict) else {}
+    return sysblk.get("profiledAt") or (ent.get("attributes") or {}).get("profiledAt")
+
+
+def job_status(base_url, token, job_id, verify_tls=True, timeout=30):
+    """What became of a job this app started — an identification run, typically.
+
+    The app could fire DATA_IDENTIFICATION and then had no way to ask how it
+    went; the answer lived in PDC's Workers page and nowhere else. Two lookups,
+    because a job id is not always a worker id: WorkersById first (the shape the
+    import workers answer to), then a scan of recent workers for one carrying
+    the id. Returns {found, status, label, workerName, jobs[], via} — `jobs`
+    carries the per-job lines the Workers page shows ("Completed Total 2 of 2"),
+    which is the part that says whether the scope was actually covered.
+    """
+    def _shape(w, via):
+        pipeline = w.get("pipeline") or {}
+        md = pipeline.get("metadata") or {}
+        jobs = []
+        for node in (pipeline.get("nodes") or []):
+            nmd = (node or {}).get("metadata") or {}
+            jobs.append({"label": (node or {}).get("label"), "status": nmd.get("status"),
+                         "statistics": nmd.get("statistics") or {},
+                         "message": nmd.get("message")})
+        return {"found": True, "via": via, "id": w.get("_id") or job_id,
+                "status": md.get("status"), "label": pipeline.get("label"),
+                "workerName": w.get("workerName"), "jobs": jobs,
+                "metadata": md}
+
+    try:
+        data = graphql(base_url, token,
+                       "query($id: MongoID!) { WorkersById(_id: $id) "
+                       "{ _id workerName pipeline } }",
+                       variables={"id": job_id}, verify_tls=verify_tls, timeout=timeout)
+        w = data.get("WorkersById")
+        if w:
+            return _shape(w, "WorkersById")
+    except RuntimeError:
+        pass                      # not a worker id, or the field rejects it — try the list
+
+    try:
+        data = graphql(base_url, token,
+                       "query { WorkersMany(limit: 50, sort: _ID_DESC) "
+                       "{ _id workerName pipeline } }",
+                       verify_tls=verify_tls, timeout=timeout)
+        for w in (data.get("WorkersMany") or []):
+            blob = json.dumps(w)
+            if job_id and job_id in blob:
+                return _shape(w, "WorkersMany")
+    except RuntimeError as e:
+        return {"found": False, "id": job_id, "error": str(e)[:200]}
+    return {"found": False, "id": job_id,
+            "error": "no worker carries this job id — it may have aged out of the recent list"}
+
+
+def recent_workers(base_url, token, limit=20, verify_tls=True, timeout=30):
+    """The Workers page, as data: the most recent worker processes with their
+    status. Useful when a job id is not to hand — which is most of the time."""
+    data = graphql(base_url, token,
+                   "query($n: Int) { WorkersMany(limit: $n, sort: _ID_DESC) "
+                   "{ _id workerName pipeline } }",
+                   variables={"n": int(limit)}, verify_tls=verify_tls, timeout=timeout)
+    out = []
+    for w in (data.get("WorkersMany") or []):
+        pipeline = w.get("pipeline") or {}
+        md = pipeline.get("metadata") or {}
+        out.append({"id": w.get("_id"), "workerName": w.get("workerName"),
+                    "label": pipeline.get("label"), "status": md.get("status"),
+                    "statistics": md.get("statistics") or {}})
+    return out
+
+
 def wait_worker(base_url, token, worker_id, verify_tls=True, timeout=120, poll=2.0):
     """Poll a worker until COMPLETED/FAILED or `timeout` seconds. Returns the
     final worker_status dict (status may still be RUNNING on timeout)."""
@@ -405,6 +488,75 @@ def bind_business_term(base_url, token, kind, _id, term_name, term_id,
     return bool((data.get(spec["update"]) or {}).get("recordId"))
 
 
+def set_method_enabled(base_url, token, kind, _id, enabled, verify_tls=True, timeout=30):
+    """Enable or disable ONE method (<Kind>UpdateById, isEnabled) — the same
+    mutation deploy uses to re-stamp term ids, so the write path is already
+    proven against live PDC.
+
+    Why this exists: PDC ships its built-in patterns and dictionaries ENABLED,
+    and an identification job started anywhere other than this app (PDC's own
+    screen, a schedule, ingest) classifies against whatever is enabled. In a
+    custom-only programme that means shapes induced from somebody else's data
+    competing with shapes induced from the estate's own — the inconsistency
+    and drift the programme exists to avoid. Reversible by construction: pass
+    enabled=True to put a method back exactly as it was.
+    """
+    spec = _METHOD_KINDS.get(kind)
+    if not spec:
+        raise ValueError(f"unknown method kind: {kind!r}")
+    data = graphql(
+        base_url, token,
+        f"mutation($id: String!, $rec: {spec['update_input']}!) "
+        f"{{ {spec['update']}(_id: $id, record: $rec) {{ recordId }} }}",
+        variables={"id": _id, "rec": {"isEnabled": bool(enabled)}},
+        verify_tls=verify_tls, timeout=timeout)
+    return bool((data.get(spec["update"]) or {}).get("recordId"))
+
+
+_COL_TYPES = ["COLUMN", "FIELD", "OBJECT", "FILE", "RESOURCE"]
+
+
+def table_columns(base_url, token, table_name, version="v3", verify_tls=True, timeout=30):
+    """Every column under a table, with whatever identification stamped on it:
+    {name, id, business_terms[], tags[]}.
+
+    Located by PARENT, not by name. Filtering COLUMN entities by the table's
+    name returns nothing at all — a column is not called after its table — which
+    is the first version of this function and the reason it reported zero
+    columns against two tables that plainly have them. The table is resolved
+    first, then its children are listed by `parentIds`, which is unambiguous.
+
+    This is the last mile the app was missing: deploy proves methods LANDED and
+    drift proves they still match the contract, but neither says whether a rule
+    ever fired against real data. That answer lives on the columns.
+    """
+    tabs = filter_entities(base_url, token, {"names": [table_name], "types": ["TABLE", "VIEW"]},
+                           version=version, verify_tls=verify_tls, timeout=timeout)
+    tab = next((t for t in (tabs or [])
+                if str(((t.get("attributes") or {}).get("name")) or t.get("name") or "").lower()
+                == table_name.lower()), None) or (tabs or [None])[0]
+    if not tab:
+        return []
+    rows = filter_entities(base_url, token,
+                           {"parentIds": [_eid(tab)], "types": list(dict.fromkeys(_COL_TYPES))},
+                           version=version, verify_tls=verify_tls, timeout=timeout)
+    out = []
+    for e in rows or []:
+        if not isinstance(e, dict):
+            continue
+        attrs = e.get("attributes") or {}
+        bts = attrs.get("businessTerms") if isinstance(attrs.get("businessTerms"), list) else []
+        tags = attrs.get("tags") if isinstance(attrs.get("tags"), list) else []
+        out.append({
+            "id": _eid(e),
+            "name": attrs.get("name") or e.get("name") or "",
+            "path": attrs.get("qualifiedName") or attrs.get("path") or "",
+            "business_terms": [str((b or {}).get("name") or b) for b in bts if b],
+            "tags": [str((t or {}).get("name") or t) for t in tags if t],
+        })
+    return out
+
+
 def start_identification_job(base_url, token, scope, dictionary_ids, pattern_ids,
                              verify_tls=True, timeout=30):
     """Trigger one DATA_IDENTIFICATION bulk job over POST /api/start-job —
@@ -458,6 +610,21 @@ def filter_entities(base_url, token, filters, version="v3", verify_tls=True, tim
     out = _req("POST", url, token=token, body={"filters": filters},
                verify_tls=verify_tls, timeout=timeout)
     return _results(out)
+
+
+def get_entity(base_url, token, entity_id, version="v3", verify_tls=True, timeout=20):
+    """One entity, whole: GET /entities/{id}. Everything PDC holds on it —
+    attributes.features (rating, qualityScore, sensitivity, lineage flags),
+    businessTerms, info, customProperties.
+
+    Debugging capability the app lacked. When a write appears to succeed and the
+    UI disagrees, the only way to settle it is to read the entity back and look
+    at what is actually stored; until now that meant leaving the app. Read-only.
+    """
+    url = clean_base(base_url) + f"/api/public/{version}/entities/{entity_id}?extended=true"
+    out = _req("GET", url, token=token, verify_tls=verify_tls, timeout=timeout)
+    d = out.get("data") if isinstance(out.get("data"), dict) else out
+    return d if isinstance(d, dict) else {}
 
 
 def resolve_terms(base_url, token, names, version="v3", verify_tls=True, timeout=20):

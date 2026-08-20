@@ -17,6 +17,7 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [methods, setMethods] = useState(null)
+  const [builtins, setBuiltins] = useState(null)     // {built_in, by_kind, changed…}
   const [prefix, setPrefix] = useState('')
 
   async function post(url, body) {
@@ -80,6 +81,26 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function builtinsPlan() {
+    setBusy(true); setError(null)
+    try { setBuiltins(await post('/api/pdc/builtins', { dry_run: true })) }
+    catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
+  async function builtinsSet(enabled) {
+    const n = builtins?.built_in ?? '?'
+    if (!window.confirm(
+      `${enabled ? 'Enable' : 'Disable'} ${n} BUILT-IN method(s) in PDC?
+
+` +
+      'This is catalog-wide, not scoped to your prefix — it affects every glossary and ' +
+      'every future scan in this PDC. Your own authored methods are never touched, and ' +
+      'the same action with the opposite setting puts these back.')) return
+    setBusy(true); setError(null)
+    try { setBuiltins(await post('/api/pdc/builtins', { enabled, dry_run: false })) }
+    catch (err) { setError(err.message) } finally { setBusy(false) }
   }
 
   async function retire() {
@@ -189,6 +210,63 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="card">
+        <header>
+          <h2>Built-in methods <span>PDC ships these enabled</span></h2>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <button className="ghost" onClick={builtinsPlan} disabled={busy || !pdc}>
+              {busy ? 'Reading…' : '↻ Count them'}
+            </button>
+            <button className="ghost" onClick={() => builtinsSet(false)}
+                    disabled={busy || !pdc || !builtins?.built_in}
+                    title="Disable every built-in pattern and dictionary (reversible)">
+              ⦸ Disable built-ins…
+            </button>
+            <button className="ghost" onClick={() => builtinsSet(true)}
+                    disabled={busy || !pdc || !builtins?.built_in}
+                    title="Put every built-in back">
+              ↺ Restore…
+            </button>
+          </div>
+        </header>
+        <p className="hint-line">
+          An identification job started anywhere other than this app — PDC's own screen, a
+          schedule, ingest — classifies against whatever is <b>enabled</b>. In a custom-only
+          programme that means shapes induced from somebody else's data competing with shapes
+          induced from your estate: the drift the programme exists to prevent. Disabling them is
+          catalog-wide and reversible, and never touches a method this app authored.
+        </p>
+        {builtins && (
+          <>
+            <div className="chips-row">
+              <span className="badge neutral">{builtins.built_in} built-in</span>
+              <span className="badge neutral">
+                {builtins.by_kind?.DataPattern ?? 0} patterns · {builtins.by_kind?.Dictionary ?? 0} dictionaries
+              </span>
+              <span className="badge good">{builtins.custom_untouched} custom untouched</span>
+              {builtins.dry_run
+                ? <span className="badge accent">plan only — nothing written</span>
+                : <span className={`badge ${builtins.failed ? 'warning' : 'good'}`}>
+                    {builtins.changed} {builtins.enabled ? 'enabled' : 'disabled'}
+                    {builtins.failed ? ` · ${builtins.failed} failed` : ''}
+                  </span>}
+            </div>
+            {!builtins.dry_run && builtins.failed > 0 && (
+              <div className="table-scroll" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                <table>
+                  <thead><tr><th>Method</th><th>Error</th></tr></thead>
+                  <tbody>
+                    {builtins.rows.filter((r) => !r.ok).map((r) => (
+                      <tr key={r.name}><td>{r.name}</td><td className="notes">{r.error}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </section>
 

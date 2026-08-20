@@ -1,5 +1,133 @@
 # Changelog
 
+## [1.10.9] — 2026-08-20
+
+### Fixed — the threshold type that stopped every pattern from firing
+
+Live-bisected. Our Data Patterns compared `confidenceScore` against the JSON
+**number** `0.5`; PDC's JsonLogic does not coerce, so the comparison never
+became true. The methods imported cleanly, passed drift, and silently never
+matched — worse than the columnCardinality bug, which was at least rejected at
+import. Both PDC's own `USA_SSN` and our own dictionaries gate on the **string**
+`"0.5"`, and the dictionaries were the control sample all along: they fired in
+the same run where every pattern tagged nothing.
+
+### Added — guards for the two silent failures found today
+
+- **Deploy refuses methods that would bind by NAME** (409, naming the terms and
+  why the ids went missing). A run on 2026-08-19 shipped 115 methods of which 40
+  bound by name, because Reconcile's ids live in memory and a restart discarded
+  them. The dry run is exempt and reports `name_binding` instead — it writes
+  nothing, and it is how a steward should find this.
+- **Identification refuses a never-profiled scope.** Patterns match against the
+  stored PROFILE, not the live table: the same 55 methods tagged 9 columns in a
+  freshly profiled table and 1 in a stale one, in the same job. Every run now
+  reports each entity's `profiledAt`.
+- **Author skips boolean sources** and flags **ambiguous shapes** — a content
+  regex claimed by more than one method identifies none of them (one induced
+  shape backed eight concepts here, and a free-text column came back bound to
+  all eight).
+
+### Added — the read-back, and the reads that made today possible
+
+- `POST /api/pdc/identified` — what identification actually did, column by
+  column, judged against the Registry. A term alone no longer counts as a match:
+  the Glossary's Apply binds terms too, so the method's **tags** decide, and
+  `expected_term_only` names the difference.
+- `POST /api/pdc/entity` — everything PDC holds on one entity, `features`
+  verbatim. It proved the rating defect in minutes.
+- `POST /api/pdc/method` — one method, whole. Diffing ours against a built-in is
+  what found the threshold bug.
+- `POST /api/pdc/job` — what became of a job, with the per-job lines that say
+  whether the scope was covered; and `recent` for when the id is not to hand.
+- `POST /api/pdc/builtins` — count, disable or restore PDC's 137 shipped
+  methods. Dry run by default, never touches a custom method, reversible.
+- `POST /api/pdc/entities` — name search, feeding a table picker on Deploy, so a
+  scope is chosen rather than pasted as a uuid.
+
+99 tests.
+
+## [1.10.8] — 2026-08-20
+
+### Added — Deploy refuses to ship a binding that will break
+
+A method with no term id binds by NAME, and a rename in PDC then detaches it
+silently — drift will not notice, because the contract and the catalog still
+agree about the weak binding. Field history: the run of 2026-08-19 deployed 115
+methods of which **40 bound by name**, because Reconcile's applied ids live in
+memory and a restart between the two steps discarded them. Nothing downstream
+said a word.
+
+Deploy is the last moment the app can see it, so it stops there: **409** naming
+the terms, why the ids went missing ("Reconcile, Apply and deploy in the SAME
+session"), and how to proceed anyway. The **dry run is exempt** — it writes
+nothing and is precisely how a steward should find this, so it reports
+`name_binding` in the plan instead of refusing. The Deploy page offers both
+routes where the refusal appears: *Reconcile first*, or *Deploy anyway, with
+weak bindings* behind a confirm that spells out the consequence.
+
+### Added — the identification read-back: did the rules actually fire?
+
+`POST /api/pdc/identified` reads the columns of named tables and judges each
+against the Registry: **expected_tagged**, **expected_missing**, **unexpected**,
+**untouched**. `expected_missing` is the one worth having — a method that
+deployed cleanly and then never fired is invisible in every other view this app
+offers. Surfaced on the Report page.
+
+Columns are located by **parentIds**, not by name. The first cut filtered COLUMN
+entities by the table's name, which can only ever return nothing, and duly
+reported "0 columns" for two tables that plainly have them. Pinned by
+client-level tests, because the API tests stub the lookup and cannot catch it.
+
+### Added — read one entity back, whole
+
+`POST /api/pdc/entity` returns everything PDC holds on an entity (by id, or by
+name), with `features` **verbatim** — a rating is not flattened to a number on
+the way out, because the shape is often the answer. Written to settle "the write
+said 200 and the catalog disagrees" without leaving the app; it immediately
+proved the Glossary's table ratings omit the `users` map PDC needs.
+
+### Added — quiet the catalog: disable the built-ins
+
+`POST /api/pdc/builtins` counts, disables or restores PDC's shipped patterns and
+dictionaries (137 on the lab: 95 dictionaries, 42 patterns). PDC ships them
+enabled, so any identification started outside this app classifies against
+shapes induced from somebody else's data — the drift a custom-only programme
+exists to prevent. Dry run by default; never touches a custom method; reversible
+with the same call. Card on the Reconcile page.
+
+### Added — choose an identification scope instead of pasting one
+
+`POST /api/pdc/entities` finds catalog entities by name, and the Deploy page
+gained a table picker. The scope field previously wanted raw entity ids, which
+meant leaving the app to copy a uuid — and a job that is tedious to scope ends
+up unscoped.
+
+### Fixed — two fixtures that were quietly wrong
+
+`filter_entities` was never stubbed, so one test made real network calls, and
+`test_needs_a_session` omitted `fake_pdc` and spent ten seconds failing to
+resolve a hostname. The suite was doing that on every run. 85 tests, 1.7s.
+
+### Changed — the UI explains itself
+
+- **Workflow map** on Load, ported class-for-class from the Glossary's
+  `WorkflowDiagram`: five clickable stages, the Registry arriving from the
+  Glossary, the verdict leaving, Report on a dotted edge because it is a read
+  and not a step. Each stage carries a one-line hover and a paragraph below.
+- **The Registry contract diagram was redrawn** at 880×300 on three reserved
+  bands ("bit squashed and needs more details") — arrow labels no longer sit on
+  their arrows and the Drift return path no longer crosses the stage text.
+- **Author explains what to do**: set the prefix (it is the scope Deploy, Drift
+  and Retire all work in), preview, read **Bound** and **Evidence** first, fix
+  what they reveal glossary-side, then download the zip or deploy. Plus a column
+  glossary.
+- **The Signature column disappears when it can only say "—"**, which is every
+  row on an estate whose scan carries no position signatures. Conditional, not
+  deleted: it returns the day one arrives.
+- **Explainers lead both pages**, the Load summary sits above the session card,
+  and the registry-row delete is the Glossary's ghost-button **✕**.
+
 ## [1.10.7] — 2026-08-19
 
 ### Fixed — the black stays in the art; the page body goes back to white

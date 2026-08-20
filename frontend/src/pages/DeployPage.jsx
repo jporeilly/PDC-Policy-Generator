@@ -51,7 +51,7 @@ function WhatDeployDoesExplainer() {
   )
 }
 
-export default function DeployPage({ summary, pdc, onPdc }) {
+export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
   const [prefix, setPrefix] = useState('')
   const [plan, setPlan] = useState(null)       // dry-run rows
   const [result, setResult] = useState(null)   // live deploy rows
@@ -59,8 +59,24 @@ export default function DeployPage({ summary, pdc, onPdc }) {
   const [error, setError] = useState(null)
   const [scopeText, setScopeText] = useState('')
   const [job, setJob] = useState(null)
+  const [jobStatus, setJobStatus] = useState(null)
+  const [look, setLook] = useState('')          // table-name search
+  const [hits, setHits] = useState(null)        // {count, entities}
 
-  async function run(dryRun) {
+  // The guard returns 409 with the terms named. Offer the override where the
+  // refusal appears, so the steward can act on it without reading API docs —
+  // but make them choose it, and say what they are choosing.
+  async function runAnyway() {
+    if (!window.confirm(
+      'Deploy with weak bindings?\n\n' +
+      'These methods will carry the term NAME instead of PDC’s id. If anyone renames ' +
+      'the term in PDC, the method silently stops being attached to it — and drift will ' +
+      'not notice, because the contract and the catalog will still agree.\n\n' +
+      'The fix is Reconcile → Apply → Deploy in one session.')) return
+    await run(false, true)
+  }
+
+  async function run(dryRun, allowNameBinding = false) {
     if (!dryRun && !window.confirm(
       `Deploy the authored method set to PDC at ${pdc?.base}?\n` +
       'Existing methods with the same names are updated in place; the set ' +
@@ -68,7 +84,10 @@ export default function DeployPage({ summary, pdc, onPdc }) {
     setBusy(true)
     setError(null)
     try {
-      const body = await post('/api/pdc/deploy', { prefix: prefix || null, dry_run: dryRun })
+      const body = await post('/api/pdc/deploy', {
+        prefix: prefix || null, dry_run: dryRun,
+        ...(allowNameBinding ? { allow_name_binding: true } : {}),
+      })
       if (dryRun) { setPlan(body); setResult(null) }
       else { setResult(body); setPlan(null) }
     } catch (err) {
@@ -79,13 +98,39 @@ export default function DeployPage({ summary, pdc, onPdc }) {
     }
   }
 
+  // Choosing a scope beats pasting one: an entity id is a uuid nobody can type
+  // from memory, and a job that is tedious to scope ends up unscoped.
+  async function findEntities() {
+    setBusy(true); setError(null)
+    try { setHits(await post('/api/pdc/entities', { q: look })) }
+    catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
+  function addToScope(id) {
+    setScopeText((t) => {
+      const have = t.split(/[\s,]+/).filter(Boolean)
+      return have.includes(id) ? t : have.concat(id).join('\n')
+    })
+  }
+
+  // Firing a job and never asking how it went is how a run gets called a
+  // success. The status carries the per-job lines PDC's Workers page shows.
+  async function checkJob() {
+    if (!job?.job_id) return
+    setBusy(true); setError(null)
+    try { setJobStatus(await post('/api/pdc/job', { id: job.job_id })) }
+    catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
   async function identify() {
     const scope = scopeText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
     if (!scope.length) { setError('paste at least one entity id to scope the job'); return }
     setBusy(true)
     setError(null)
     try {
-      setJob(await post('/api/pdc/identify', { prefix: result?.prefix || prefix || summary.glossary, scope }))
+      const j = await post('/api/pdc/identify', { prefix: result?.prefix || prefix || summary.glossary, scope })
+      setJob(j)
+      setJobStatus(null)
     } catch (err) {
       setError(err.message)
       if (err.message.includes('expired')) onPdc(null)
@@ -134,7 +179,21 @@ export default function DeployPage({ summary, pdc, onPdc }) {
             </span>
           </p>
         )}
-        {error && <div className="error">{error}</div>}
+        {error && (
+          <div className="error">
+            {error}
+            {error.includes('bind by NAME') && (
+              <div className="actions" style={{ marginTop: '.6rem' }}>
+                <button className="ghost" onClick={() => onNavigate?.('reconcile')}>
+                  → Reconcile first (recommended)
+                </button>
+                <button className="ghost" onClick={runAnyway} disabled={busy}>
+                  Deploy anyway, with weak bindings
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {result?.workers?.length > 0 && (
           <p className="summary">
@@ -156,10 +215,26 @@ export default function DeployPage({ summary, pdc, onPdc }) {
           </p>
         )}
         {plan && (
-          <p className="summary">
-            <span className="badge accent" style={{ marginRight: '1rem' }}>+ create {plan.counts.create}</span>
-            <span className="badge neutral">↻ update {plan.counts.update}</span>
-          </p>
+          <>
+            <p className="summary">
+              <span className="badge accent" style={{ marginRight: '1rem' }}>+ create {plan.counts.create}</span>
+              <span className="badge neutral">↻ update {plan.counts.update}</span>
+            </p>
+            {/* the dry run reports what a real deploy would refuse over, so the
+                problem is found here rather than in a 409 */}
+            {plan.name_binding?.blocks_deploy && (
+              <p className="summary">
+                <span className="badge warning">
+                  ⚠ {plan.name_binding.count} method(s) would bind by name — deploy will refuse
+                </span>
+                <span className="notes" style={{ display: 'block', marginTop: '.35rem' }}>
+                  {plan.name_binding.terms.join(', ')}
+                  {plan.name_binding.count > plan.name_binding.terms.length ? ' …' : ''}
+                  {' — '}Reconcile, Apply, then deploy in the same session.
+                </span>
+              </p>
+            )}
+          </>
         )}
 
         {rows.length > 0 && (
@@ -215,19 +290,100 @@ export default function DeployPage({ summary, pdc, onPdc }) {
           to the entity ids below (from PDC's catalog — a data source or folder id per
           line). Never catalog-wide from here; deploy first.
         </p>
+        <div className="actions">
+          <input className="text" value={look} onChange={(e) => setLook(e.target.value)}
+                 placeholder="find a table by name, e.g. customers"
+                 onKeyDown={(e) => { if (e.key === 'Enter') findEntities() }} />
+          <button className="ghost" onClick={findEntities} disabled={busy || !pdc || look.trim().length < 2}>
+            🔍 Find tables
+          </button>
+        </div>
+        {hits && (
+          hits.count === 0
+            ? <p className="hint-line">Nothing in the catalog matches “{hits.q}”.</p>
+            : <div className="table-scroll" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                <table>
+                  <thead><tr><th>Entity</th><th>Type</th><th>Path</th><th /></tr></thead>
+                  <tbody>
+                    {hits.entities.map((e) => (
+                      <tr key={e.id}>
+                        <td>{e.name}</td>
+                        <td className="notes">{e.type}</td>
+                        <td className="notes cell-clip" title={e.path}>{e.path}</td>
+                        <td>
+                          <button className="ghost" onClick={() => addToScope(e.id)}
+                                  title={`Add ${e.id} to the scope`}>+ scope</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+        )}
         <div className="form-grid">
           <label>Entity ids (one per line)
             <textarea className="text" rows={3} value={scopeText}
                       onChange={(e) => setScopeText(e.target.value)}
-                      placeholder="e.g. 64f1c0…  (Data Sources → id)" />
+                      placeholder="pick tables above, or paste entity ids" />
           </label>
         </div>
         {job && (
-          <p className="summary">
-            <span className="badge good" title={`methods in scope: ${job.methods}`}>
-              ✓ job queued — id {job.job_id ?? '—'} · {job.methods} method(s) · {job.scope} entity id(s)
-            </span>
-          </p>
+          <>
+            <p className="summary">
+              <span className="badge good" title={`methods in scope: ${job.methods}`}>
+                ✓ job queued — id {job.job_id ?? '—'} · {job.methods} method(s) · {job.scope} entity id(s)
+              </span>
+              <button className="ghost" style={{ marginLeft: '.6rem' }}
+                      onClick={checkJob} disabled={busy || !job.job_id}>
+                {busy ? 'Checking…' : '↻ Check job'}
+              </button>
+            </p>
+            {jobStatus && (
+              jobStatus.found === false
+                ? <p className="hint-line">
+                    PDC has no worker carrying that id{jobStatus.error ? ` — ${jobStatus.error}` : ''}.
+                  </p>
+                : <>
+                    <p className="summary">
+                      <span className={`badge ${jobStatus.status === 'COMPLETED' ? 'good'
+                        : jobStatus.status === 'FAILED' ? 'serious' : 'accent'}`}>
+                        {jobStatus.label ?? 'job'} — {jobStatus.status ?? 'unknown'}
+                      </span>
+                    </p>
+                    {/* the per-job lines are the part that says whether the scope
+                        was actually covered — a COMPLETED worker can still have
+                        processed a fraction of what it was given */}
+                    {(jobStatus.jobs ?? []).length > 0 && (
+                      <div className="table-scroll">
+                        <table>
+                          <thead><tr><th>Job</th><th>Status</th><th>Processed</th></tr></thead>
+                          <tbody>
+                            {jobStatus.jobs.map((j, i) => {
+                              const st = j.statistics ?? {}
+                              const done = st.COMPLETED ?? 0
+                              const total = st.TOTAL ?? 0
+                              return (
+                                <tr key={i}>
+                                  <td>{j.label ?? '—'}</td>
+                                  <td>
+                                    <span className={`badge ${j.status === 'COMPLETED' ? 'good' : 'accent'}`}>
+                                      {j.status ?? '—'}
+                                    </span>
+                                  </td>
+                                  <td className={total && done < total ? 'notes warning' : 'notes'}>
+                                    {total ? `${done} of ${total}` : '—'}
+                                    {st.FAILED ? ` · ${st.FAILED} failed` : ''}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+            )}
+          </>
         )}
       </section>
     </>

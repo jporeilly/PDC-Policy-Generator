@@ -30,6 +30,8 @@ export default function ReportPage({ summary, pdc, prefix: initialPrefix }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [stampedAt, setStampedAt] = useState(null)
+  const [tables, setTables] = useState('')        // names to read identification back from
+  const [ident, setIdent] = useState(null)
 
   const post = async (url, body) => {
     const res = await fetch(url, {
@@ -102,6 +104,17 @@ export default function ReportPage({ summary, pdc, prefix: initialPrefix }) {
       line: `${dc.clean} clean · ${dc.drifted} drifted · ${dc.missing} missing · ${dc.orphaned} orphaned — deployed and governed do not agree.`,
     }
   })()
+
+  // The last mile: deploy proves a method landed, drift proves it still matches
+  // the contract, and neither notices a rule that deployed cleanly then never
+  // fired. That only shows up on the columns.
+  async function readBack() {
+    const names = tables.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean)
+    if (!names.length) { setError('name at least one table to read back'); return }
+    setBusy(true); setError(null)
+    try { setIdent(await post('/api/pdc/identified', { tables: names, prefix })) }
+    catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
 
   function exportHtml() {
     const esc = (x) => String(x ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
@@ -233,6 +246,69 @@ Registry, the authored set${dc ? ' and the live catalog' : ''} at compile time.<
                 <tbody>
                   {Object.entries(skipGroups).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
                     <tr key={k}><td className="notes">{k}</td><td className="num">{v}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="card">
+        <header>
+          <h2>Did the rules actually fire? <span>identification, read back</span></h2>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <input className="text" value={tables} onChange={(e) => setTables(e.target.value)}
+                   placeholder="table names, e.g. customers water_quality_reports"
+                   style={{ minWidth: '22rem' }} />
+            <button className="ghost" onClick={readBack} disabled={busy || !pdc}>
+              {busy ? 'Reading…' : '⇩ Read back'}
+            </button>
+          </div>
+        </header>
+        <p className="hint-line">
+          Deploy proves a method landed and Drift proves it still matches the contract. Neither
+          notices a rule that deployed cleanly and then never fired — that only shows on the
+          columns. A <b>term</b> on a column proves nothing on its own, because the Glossary's
+          Apply binds terms too; the method's <b>tags</b> are what a rule stamps when it actually
+          matches, so those decide the verdict.
+        </p>
+        {ident && (
+          <>
+            <div className="chips-row">
+              <span className="badge good">{ident.counts.expected_tagged} tagged as governed</span>
+              <span className={`badge ${ident.counts.expected_term_only ? 'warning' : 'neutral'}`}>
+                {ident.counts.expected_term_only ?? 0} term only (Apply, not a match)
+              </span>
+              <span className={`badge ${ident.counts.expected_missing ? 'warning' : 'neutral'}`}>
+                {ident.counts.expected_missing} expected, nothing there
+              </span>
+              <span className={`badge ${ident.counts.unexpected ? 'accent' : 'neutral'}`}>
+                {ident.counts.unexpected} unexpected
+              </span>
+              <span className="badge neutral">{ident.counts.untouched} untouched</span>
+            </div>
+            <div className="table-scroll" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+              <table>
+                <thead><tr><th>Table</th><th>Column</th><th>Verdict</th><th>Contract expects</th><th>PDC bound</th><th>Tags on column</th></tr></thead>
+                <tbody>
+                  {ident.rows.filter((r) => r.verdict !== 'untouched').map((r) => (
+                    <tr key={`${r.table}.${r.column}`}>
+                      <td className="notes">{r.table}</td>
+                      <td>{r.column}</td>
+                      <td>
+                        <span className={`badge ${r.verdict === 'expected_tagged' ? 'good'
+                          : r.verdict === 'unexpected' ? 'accent' : 'warning'}`}
+                              title={r.verdict === 'expected_term_only'
+                                ? 'The term is bound but none of the method’s tags are on the column — that is a term link from the Glossary’s Apply, not a rule that matched'
+                                : undefined}>
+                          {r.verdict.replaceAll('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="notes">{r.expected.join(', ') || '—'}</td>
+                      <td className="notes">{r.bound.join(', ') || '—'}</td>
+                      <td className="notes">{(r.tags ?? []).join(', ') || '—'}</td>
+                    </tr>
                   ))}
                 </tbody>
               </table>

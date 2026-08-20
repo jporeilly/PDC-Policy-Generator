@@ -59,6 +59,9 @@ def api_client(registry_file):
 
 
 def loaded_client(api_client, registry_file):
+    """api_client with the fixture Registry already loaded. Deliberately a plain
+    HELPER, not a fixture: tests call it directly so a single test can choose
+    when the load happens."""
     res = api_client.post(f"/api/load?path={registry_file}")
     assert res.status_code == 200, res.text
     return api_client
@@ -75,7 +78,8 @@ def fake_pdc(monkeypatch):
     class TokenExpired(Exception):
         pass
 
-    calls = {"removed": [], "uploads": [], "binds": [], "jobs": [], "waited": []}
+    calls = {"removed": [], "uploads": [], "binds": [], "jobs": [], "waited": [],
+             "enabled": []}
 
     def auth(base, user, pw, version="v3", verify_tls=False, realm="pdc"):
         if pw != "good":
@@ -143,6 +147,62 @@ def fake_pdc(monkeypatch):
         calls["binds"].append({"kind": kind, "_id": _id, "term": term_name, "id": term_id})
         return True
 
+    def filter_entities(base, token, filters, version="v3", verify_tls=False, timeout=20):
+        # a name search over the live catalog; the fixture answers for anything
+        # the tests look up by name
+        names = [str(n).lower() for n in (filters or {}).get("names", [])]
+        rows = [{"_id": "e-1", "attributes": {"name": "Claims Member Number", "type": "COLUMN",
+                                              "qualifiedName": "public.customers.mbr_no"}},
+                {"_id": "e-2", "attributes": {"name": "customers", "type": "TABLE",
+                                              "qualifiedName": "public.customers"}}]
+        return [r for r in rows
+                if not names or str(r["attributes"]["name"]).lower() in names]
+
+    def profiled_at(base, token, entity_id, version="v3", verify_tls=False, timeout=20):
+        # profiled by default; the freshness tests monkeypatch this to None
+        return "2026-08-20T09:00:00Z"
+
+    def job_status(base, token, job_id, verify_tls=False, timeout=30):
+        return {"found": True, "via": "WorkersById", "id": job_id, "status": "COMPLETED",
+                "label": "Identifying Data", "workerName": "DATA_IDENTIFICATION",
+                "jobs": [{"label": "Data Identification Job", "status": "COMPLETED",
+                          "statistics": {"TOTAL": 2, "COMPLETED": 2}, "message": None}],
+                "metadata": {"status": "COMPLETED"}}
+
+    def recent_workers(base, token, limit=20, verify_tls=False, timeout=30):
+        return [{"id": "w-1", "workerName": "DATA_IDENTIFICATION",
+                 "label": "Identifying Data", "status": "COMPLETED",
+                 "statistics": {"TOTAL": 2, "COMPLETED": 2}}]
+
+    def get_entity(base, token, entity_id, version="v3", verify_tls=False, timeout=20):
+        # a table PDC rated itself: the rating object carries its raters, which
+        # is the shape the Glossary's roll-up omits
+        return {"_id": entity_id, "attributes": {
+            "name": "customers", "type": "TABLE",
+            "qualifiedName": "public.customers",
+            "features": {"rating": {"value": 4, "users": {"u-1": 4}},
+                         "qualityScore": 91, "sensitivity": "HIGH"},
+            "businessTerms": [{"name": "Customer Record", "id": "t-9"}],
+            "customProperties": [{"id": "lbl-1", "value": "Confidential"}]}}
+
+    def table_columns(base, token, table_name, version="v3", verify_tls=False, timeout=30):
+        # customers: one column the contract claims and PDC tagged, one it
+        # claims and PDC did not, one PDC tagged that the contract never claimed
+        return [
+            {"id": "c1", "name": "mbr_no", "path": "public.customers.mbr_no",
+             "business_terms": ["Member Number"], "tags": ["pii"]},
+            {"id": "c2", "name": "state", "path": "public.customers.state",
+             "business_terms": [], "tags": []},
+            {"id": "c3", "name": "notes", "path": "public.customers.notes",
+             "business_terms": ["Something Else"], "tags": []},
+            {"id": "c4", "name": "filler", "path": "public.customers.filler",
+             "business_terms": [], "tags": []},
+        ]
+
+    def set_method_enabled(base, token, kind, _id, enabled, verify_tls=False, timeout=30):
+        calls["enabled"].append({"kind": kind, "_id": _id, "enabled": bool(enabled)})
+        return True
+
     def start_identification_job(base, token, scope, dictionary_ids, pattern_ids,
                                  verify_tls=False, timeout=30):
         calls["jobs"].append({"scope": list(scope), "dictionaryIds": list(dictionary_ids),
@@ -154,6 +214,12 @@ def fake_pdc(monkeypatch):
                      ("remove_method", remove_method), ("upload_import", upload_import),
                      ("wait_worker", wait_worker), ("get_method", get_method),
                      ("bind_business_term", bind_business_term),
+                     ("set_method_enabled", set_method_enabled),
+                     ("table_columns", table_columns),
+                     ("get_entity", get_entity),
+                     ("job_status", job_status), ("recent_workers", recent_workers),
+                     ("profiled_at", profiled_at),
+                     ("filter_entities", filter_entities),
                      ("start_identification_job", start_identification_job)]:
         monkeypatch.setattr(api_mod.pdc_mod, name, fn)
     return calls

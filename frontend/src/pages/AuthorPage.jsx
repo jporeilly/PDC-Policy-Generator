@@ -156,8 +156,61 @@ export default function AuthorPage({ summary }) {
     }
   }
 
+  // A column that can only ever print "—" is noise. This estate's scan carries
+  // no position signatures at all, so the header appears only when at least one
+  // authored rule actually has one to show.
+  const anySignature = (preview?.patterns ?? []).some((p) => p.signature)
+
   return (
     <>
+      <details className="card" open>
+        <summary>What this page does — and what to do on it</summary>
+        <p className="hint-line">
+          Authoring turns each governed row of the Registry into an import-ready PDC method:
+          a <b>Data Pattern</b> where the concept has a value shape, a <b>Dictionary</b> where it
+          has a reference list. Nothing is decided here and nothing is editable — every regex,
+          value list, tag and term binding is copied from the contract the Glossary wrote. Change
+          what you see by changing the glossary, not by hand-editing a rule.
+        </p>
+        <ol className="workcycle">
+          <li>
+            <b>Set the name prefix</b> (defaults to the glossary name). Every method is named
+            <code> prefix + term</code>, and that prefix is the scope Deploy, Drift and Retire
+            all work in — it is what lets this app clean up exactly what it created.
+          </li>
+          <li>
+            <b>Preview</b>, then read two columns before anything else: <b>Bound</b> and
+            <b>Evidence</b>. They tell you how strong each method is.
+          </li>
+          <li>
+            <b>Fix what those columns reveal, glossary-side</b> — a term binding by name wants a
+            Reconcile; a concept in the skipped list wants a seed, a re-scan, or an honest
+            mapping-only declaration.
+          </li>
+          <li>
+            <b>Then either</b> ⬇ <b>Download import zip</b> and import it by hand in PDC
+            (Data Operations → Data Identification → Import), <b>or</b> carry on to Reconcile and
+            let <b>Deploy</b> push the same set over the API and bind the term ids for you.
+            The zip and the deploy author byte-identical rules.
+          </li>
+        </ol>
+        <h3 className="subhead">What the columns mean</h3>
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Column</th><th>Reading it</th></tr></thead>
+            <tbody>
+              <tr><td><b>Method</b></td><td className="notes">The name PDC will show, and the scope handle: <code>prefix + term</code>.</td></tr>
+              <tr><td><b>Bound</b></td><td className="notes"><span className="badge good">✓ by id</span> the method carries PDC's own term id — the strong binding. <span className="badge warning">⚠ by name</span> it carries only the term's name, which breaks the moment a term is renamed. Reconcile turns the second into the first.</td></tr>
+              <tr><td><b>Evidence</b></td><td className="notes">What the rule rests on. <b>profiled</b> and <b>recognised</b> come from the estate's own values; <b>curated</b> from the versioned domain pack; <b>name-anchored</b> is a steward's decision that the column NAME identifies the concept, with the regex only sanity-checking. They are not equally strong claims, which is why the column exists.</td></tr>
+              <tr><td><b>Content regex</b></td><td className="notes">The shape PDC matches values against. For a name-anchored rule this is deliberately loose — it proves the column still holds numbers or dates, not that the column is the concept.</td></tr>
+              <tr><td><b>Column hint</b></td><td className="notes">The column-name pattern, built from the physical columns the scan actually saw. It carries half the confidence on a name-anchored rule and a third on a profiled one.</td></tr>
+              <tr><td><b>Tags</b></td><td className="notes">What the method stamps when it matches — filtered to the Registry's governed allow-list, so a method can never apply vocabulary the glossary does not govern.</td></tr>
+              <tr><td><b>Values</b> / <b>Sample</b></td><td className="notes">Dictionaries only: how many reference values travel in the CSV, and the first few of them.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
       <SummaryCard summary={summary} />
 
       <section className="card">
@@ -185,6 +238,30 @@ export default function AuthorPage({ summary }) {
         </p>
         {error && <div className="error">{error}</div>}
 
+        {preview?.ambiguous_shapes?.length > 0 && (
+          <div className="error" style={{ background: 'transparent' }}>
+            <b>⚠ {preview.ambiguous_shapes.length} content shape(s) are claimed by more than one
+            method.</b> A regex that identifies several concepts identifies none of them — on this
+            estate one induced shape backed eight concepts and a free-text column came back bound
+            to all eight. Fix it glossary-side (a real shape per concept, or declare them
+            mapping-only); a Registry from 1.38.34 onward marks these name-anchored so the column
+            name has to agree.
+            <div className="table-scroll" style={{ marginTop: '.5rem', maxHeight: '180px', overflowY: 'auto' }}>
+              <table>
+                <thead><tr><th>Shape</th><th className="num">Methods</th><th>Claimed by</th></tr></thead>
+                <tbody>
+                  {preview.ambiguous_shapes.map((a) => (
+                    <tr key={a.regex}>
+                      <td className="mono cell-clip" title={a.regex}>{a.regex}</td>
+                      <td className="num">{a.terms.length}</td>
+                      <td className="notes">{a.terms.join(', ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {preview && (
           <>
             <h3 className="subhead">Data Patterns ({preview.patterns.length})</h3>
@@ -193,7 +270,8 @@ export default function AuthorPage({ summary }) {
                 <thead>
                   <tr><th>Method</th><th>Term</th><th>Bound</th><th>Evidence</th>
                       <th>Content regex</th>
-                      <th>Signature</th><th>Column hint</th><th>Tags</th></tr>
+                      {anySignature && <th>Signature</th>}
+                      <th>Column hint</th><th>Tags</th></tr>
                 </thead>
                 <tbody>
                   {preview.patterns.map((p) => (
@@ -205,7 +283,9 @@ export default function AuthorPage({ summary }) {
                         : <span className="badge warning" title="Reconcile to bind by id">⚠ by name</span>}</td>
                       <td><EvidenceBadge kind={p.evidence} /></td>
                       <td className="mono cell-clip" title={p.regex}>{p.regex}</td>
-                      <td className="mono cell-clip" title={p.signature ?? ''}>{p.signature ?? '—'}</td>
+                      {anySignature && (
+                        <td className="mono cell-clip" title={p.signature ?? ''}>{p.signature ?? '—'}</td>
+                      )}
                       <td className="mono cell-clip" title={p.column_hint ?? ''}>{p.column_hint ?? '—'}</td>
                       <td className="notes">{p.tags.join(', ')}</td>
                     </tr>

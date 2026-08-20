@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import PdcConnect from '../components/PdcConnect.jsx'
+import WorkflowDiagram from '../components/WorkflowDiagram.jsx'
 
-export default function LoadPage({ summary, onLoaded, pdc, onPdc }) {
+export default function LoadPage({ summary, onLoaded, pdc, onPdc, onNavigate }) {
   const [registries, setRegistries] = useState([])
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -71,6 +72,52 @@ export default function LoadPage({ summary, onLoaded, pdc, onPdc }) {
 
   return (
     <>
+      <details className="card" open>
+        <summary>The five stages — and what flows through them</summary>
+        <p className="hint-line">
+          Every box is a page: click one to go there. The chips are not this app's to
+          make — the Registry arrives from the Glossary Generator, and the verdict is
+          what Drift reports back about the live catalog.
+        </p>
+        <WorkflowDiagram onNavigate={onNavigate} />
+        <ul className="workcycle">
+          <li>
+            <b>Load</b> — open the Classification Registry the Glossary Generator wrote at
+            Generate. One governed row per concept: term, tags, sensitivity, detection seeds.
+            Everything downstream reads this and nothing re-decides it.
+          </li>
+          <li>
+            <b>Author</b> — turn each seeded row into an import-ready PDC method: a Data Pattern
+            for a value shape, a Dictionary for a reference list. Deterministic and offline, so
+            the same Registry always yields the same rules.
+          </li>
+          <li>
+            <b>Reconcile</b> — look every term up in the live catalog and bind by <i>id</i> rather
+            than by name, so a rename in PDC can never quietly unhook a method from its term.
+            Needs a session; the ids it applies live in memory until you deploy or export.
+          </li>
+          <li>
+            <b>Deploy</b> — import the authored set over PDC's own import API, verify each method
+            landed, and re-stamp the reconciled term ids afterwards. Everything stays under the
+            name prefix, which is what lets Retire clean up exactly what this app created.
+          </li>
+          <li>
+            <b>Drift</b> — read the catalog back and compare it against the Registry, method by
+            method: <b>clean</b>, <b>drifted</b> (deployed but changed), <b>missing</b> (governed
+            but absent), <b>orphaned</b> (deployed but no longer governed). This is the stage the
+            whole pipeline exists for.
+          </li>
+          <li>
+            <b>Report</b> — not a step but a read: the contract, the authored set and the live
+            catalog in one account, exportable as a standalone HTML file.
+          </li>
+        </ul>
+      </details>
+
+      <RegistryContractExplainer />
+
+      {summary && <SummaryCard summary={summary} />}
+
       <PdcConnect
         pdc={pdc}
         onPdc={onPdc}
@@ -139,9 +186,6 @@ export default function LoadPage({ summary, onLoaded, pdc, onPdc }) {
         )}
       </section>
 
-      <RegistryContractExplainer />
-
-      {summary && <SummaryCard summary={summary} />}
     </>
   )
 }
@@ -152,17 +196,26 @@ export default function LoadPage({ summary, onLoaded, pdc, onPdc }) {
 // WorkflowDiagram (theme tokens only, no chart libraries). Static: these
 // boxes are other apps, not pages of this one.
 function HandoffDiagram() {
+  // Laid out on a grid with three reserved bands, because the first cut let
+  // arrow labels sit on their own arrows and ran the Drift loop straight
+  // through the stage text ("Diagram needs tidying up"):
+  //   y  28-218  the actors and the contract between them
+  //   y  232     the Drift return path, in the gap below them
+  //   y 246-320  what this app does with the contract
+  // Verb labels are one word each; the qualifier lives under the box it
+  // belongs to, where there is room for it.
   return (
     <div className="ho-wrap">
       <svg
         className="ho"
-        viewBox="0 0 880 300"
+        viewBox="0 0 900 340"
         aria-label="Handoff: the Glossary Generator writes the Classification Registry at Generate.
           The Registry carries one governed row per concept — term and minted id, governed tags,
-          and detection seeds labelled with the evidence behind them. The Policy Generator reads
-          those rows and authors Data Identification methods in PDC; Reconcile binds ids against
-          the live catalog, Deploy imports the set, and Drift compares what is deployed against
-          what the Registry governs."
+          sensitivity, category and sources, detection seeds labelled by evidence, and the
+          steward's detection intent. The Policy Generator reads those rows and authors Data
+          Identification methods in PDC: Author mints one method per seed, Reconcile binds each
+          term by id, Deploy imports the set and Drift reads PDC back to prove deployed and
+          governed still agree."
       >
         <defs>
           <marker id="ho-arrowhead" viewBox="0 0 8 8" refX="7" refY="4"
@@ -172,66 +225,71 @@ function HandoffDiagram() {
           </marker>
         </defs>
 
-        {/* --- the three actors, left to right --- */}
+        {/* band 1 — the actors, and the contract that sits between them */}
         <g className="ho-node">
-          <rect x="8" y="40" width="150" height="58" rx="8" />
-          <text x="83" y="63" textAnchor="middle">Glossary</text>
-          <text x="83" y="81" textAnchor="middle">Generator</text>
-          <text className="ho-sub" x="83" y="115" textAnchor="middle">scan, review, govern</text>
+          <rect x="8" y="48" width="140" height="56" rx="8" />
+          <text x="78" y="72" textAnchor="middle">Glossary</text>
+          <text x="78" y="90" textAnchor="middle">Generator</text>
+          <text className="ho-sub" x="78" y="124" textAnchor="middle">scan, review, govern</text>
         </g>
 
-        <path className="ho-arrow" d="M162 69 H206" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="184" y="59" textAnchor="middle">writes at Generate</text>
+        <path className="ho-arrow" d="M152 76 H206" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="179" y="64" textAnchor="middle">writes</text>
 
         <g className="ho-node ho-contract">
-          <rect x="210" y="26" width="240" height="182" rx="10" />
-          <text x="330" y="52" textAnchor="middle">Classification Registry</text>
-          <text className="ho-sub" x="330" y="70" textAnchor="middle">classification-registry/1</text>
-          <line className="ho-rule" x1="228" y1="82" x2="432" y2="82" />
-          <text className="ho-item" x="228" y="102">term name + minted id</text>
-          <text className="ho-item" x="228" y="122">governed tags (allow-list)</text>
-          <text className="ho-item" x="228" y="142">sensitivity, category, sources</text>
-          <text className="ho-item" x="228" y="162">detection seeds, each labelled</text>
-          <text className="ho-seed" x="240" y="180">profiled · recognised · curated · name-anchored</text>
-          <text className="ho-item" x="228" y="200">detection_intent (mapping-only)</text>
+          <rect x="214" y="28" width="260" height="190" rx="10" />
+          <text x="344" y="54" textAnchor="middle">Classification Registry</text>
+          <text className="ho-sub" x="344" y="72" textAnchor="middle">written at Generate</text>
+          <line className="ho-rule" x1="234" y1="86" x2="454" y2="86" />
+          <text className="ho-item" x="234" y="108">term name + minted id</text>
+          <text className="ho-item" x="234" y="130">governed tags (allow-list)</text>
+          <text className="ho-item" x="234" y="152">sensitivity, category, sources</text>
+          <text className="ho-item" x="234" y="174">detection seeds, each labelled</text>
+          <text className="ho-seed" x="246" y="192">profiled · recognised · curated · name-anchored</text>
+          <text className="ho-item" x="234" y="210">detection_intent (mapping-only)</text>
         </g>
 
-        <path className="ho-arrow" d="M454 69 H498" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="476" y="59" textAnchor="middle">read by</text>
+        <path className="ho-arrow" d="M480 76 H534" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="507" y="64" textAnchor="middle">read by</text>
 
         <g className="ho-node">
-          <rect x="502" y="40" width="150" height="58" rx="8" />
-          <text x="577" y="63" textAnchor="middle">Policy</text>
-          <text x="577" y="81" textAnchor="middle">Generator</text>
-          <text className="ho-sub" x="577" y="115" textAnchor="middle">authors, never re-decides</text>
+          <rect x="540" y="48" width="140" height="56" rx="8" />
+          <text x="610" y="72" textAnchor="middle">Policy</text>
+          <text x="610" y="90" textAnchor="middle">Generator</text>
+          <text className="ho-sub" x="610" y="124" textAnchor="middle">authors, never re-decides</text>
         </g>
 
-        <path className="ho-arrow" d="M656 69 H700" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="678" y="59" textAnchor="middle">authors</text>
+        <path className="ho-arrow" d="M686 76 H740" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="713" y="64" textAnchor="middle">authors</text>
 
         <g className="ho-node">
-          <rect x="704" y="40" width="168" height="58" rx="8" />
-          <text x="788" y="63" textAnchor="middle">Data Identification</text>
-          <text className="ho-sub" x="788" y="81" textAnchor="middle">patterns + dictionaries in PDC</text>
+          <rect x="746" y="48" width="146" height="56" rx="8" />
+          <text x="819" y="72" textAnchor="middle">Data Identification</text>
+          <text className="ho-sub" x="819" y="90" textAnchor="middle">in PDC</text>
         </g>
 
-        {/* --- what this app does with the contract, under the actors --- */}
+        {/* band 2 — Drift reads the catalog back against the contract. Routed in
+            the empty gap between the sub-labels and the stage cards. */}
+        <path className="ho-arrow ho-loop" d="M819 108 V232 H480" markerEnd="url(#ho-arrowhead)" />
+        <text className="ho-label" x="650" y="224" textAnchor="middle">Drift reads PDC back</text>
+
+        {/* band 3 — the three verbs, each in its own card */}
         <g className="ho-stage">
-          <text className="ho-stage-n" x="502" y="150">Author</text>
-          <text className="ho-item" x="502" y="168">one method per seed, tags and</text>
-          <text className="ho-item" x="502" y="184">term binding copied verbatim</text>
+          <rect className="ho-card" x="214" y="246" width="200" height="74" rx="8" />
+          <text className="ho-stage-n" x="230" y="270">Author</text>
+          <text className="ho-item" x="230" y="290">one method per seed;</text>
+          <text className="ho-item" x="230" y="308">tags and term copied verbatim</text>
 
-          <text className="ho-stage-n" x="502" y="212">Reconcile</text>
-          <text className="ho-item" x="502" y="230">bind each term by id, not name</text>
+          <rect className="ho-card" x="430" y="246" width="200" height="74" rx="8" />
+          <text className="ho-stage-n" x="446" y="270">Reconcile</text>
+          <text className="ho-item" x="446" y="290">bind each term by id,</text>
+          <text className="ho-item" x="446" y="308">never by name</text>
 
-          <text className="ho-stage-n" x="502" y="258">Deploy → Drift</text>
-          <text className="ho-item" x="502" y="276">import the set, then prove deployed</text>
-          <text className="ho-item" x="502" y="292">and governed still agree</text>
+          <rect className="ho-card" x="646" y="246" width="246" height="74" rx="8" />
+          <text className="ho-stage-n" x="662" y="270">Deploy → Drift</text>
+          <text className="ho-item" x="662" y="290">import the set, then prove</text>
+          <text className="ho-item" x="662" y="308">deployed and governed agree</text>
         </g>
-
-        {/* Drift is the loop that closes it: PDC read back against the contract */}
-        <path className="ho-arrow ho-loop" d="M788 106 V246 H470" markerEnd="url(#ho-arrowhead)" />
-        <text className="ho-label" x="640" y="240" textAnchor="middle">Drift reads PDC back</text>
       </svg>
     </div>
   )

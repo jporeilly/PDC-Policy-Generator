@@ -280,7 +280,7 @@ details.card > summary { cursor: pointer; font-weight: 650; font-size: .95rem; }
 /* The handoff diagram. Wider and taller than the 560x92 strip it replaced:
    the contract's own contents are the interesting part, and a squashed strip
    could only name the boxes. */
-.ho-wrap { max-width: 880px; margin: 1rem 0 .4rem; overflow-x: auto; }
+.ho-wrap { max-width: 900px; margin: 1rem 0 .4rem; overflow-x: auto; }
 .ho { width: 100%; min-width: 620px; height: auto; display: block; }
 .ho text { font: 600 13px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-primary); }
 .ho .ho-node rect { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
@@ -292,6 +292,7 @@ details.card > summary { cursor: pointer; font-weight: 650; font-size: .95rem; }
 .ho .ho-item { font-size: 11.5px; font-weight: 500; fill: var(--text-primary); }
 .ho .ho-seed { font-size: 10.5px; font-weight: 500; fill: var(--text-muted); }
 .ho .ho-stage-n { font-size: 12px; font-weight: 700; fill: var(--accent); }
+.ho .ho-card { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
 .ho .ho-arrow { fill: none; stroke: var(--baseline); stroke-width: 1.5; }
 .ho .ho-loop { stroke-dasharray: 4 3; }
 .ho .ho-head { fill: var(--baseline); }
@@ -320,3 +321,19 @@ details.card > summary { cursor: pointer; font-weight: 650; font-size: .95rem; }
 .bucket-title { display: flex; align-items: center; gap: .55rem; font-size: .9rem; font-weight: 650; }
 .bucket-list { margin: .4rem 0 0 1.4rem; color: var(--text-secondary); font-size: .86rem; }
 .bucket-list li { margin-top: .2rem; }
+
+/* The workflow map. Ported class-for-class from the Glossary's home.css, so
+   the suite's two apps draw their pipelines the same way. */
+.wf-wrap { max-width: 700px; margin: .4rem 0 1rem; overflow-x: auto; }
+.wf { width: 100%; min-width: 520px; height: auto; display: block; }
+.wf text { font: 600 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-primary); }
+.wf .wf-node { cursor: pointer; outline: none; }
+.wf .wf-node rect { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
+.wf .wf-node:hover rect, .wf .wf-node:focus-visible rect { stroke: var(--accent); stroke-width: 1.5; }
+.wf .wf-node:hover text, .wf .wf-node:focus-visible text { fill: var(--accent); }
+.wf .wf-node-sm text { font-size: 11px; font-weight: 500; fill: var(--text-secondary); }
+.wf .wf-arrow { fill: none; stroke: var(--baseline); stroke-width: 1.5; }
+.wf .wf-dotted { stroke-dasharray: 2.5 3.5; }
+.wf .wf-head { fill: var(--baseline); }
+.wf .wf-out rect { fill: none; stroke: var(--gridline); stroke-width: 1; }
+.wf .wf-out text { font-size: 11px; font-weight: 500; fill: var(--text-muted); }

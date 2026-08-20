@@ -1,6 +1,28 @@
 # Version
 
-**1.10.7** — 2026-08-19
+**1.10.9** — 2026-08-20
+
+The day the pipeline was proven end to end on a live estate — and the four
+silent failures that turned up on the way. A numeric threshold meant no Data
+Pattern ever fired; a stale profile meant patterns matched against data that no
+longer existed; a boolean column can never be content-matched at all; and one
+induced shape backed eight concepts, so a free-text column was bound to all of
+them. Each is fixed, each is guarded, and each guard says what will silently not
+work BEFORE it does not work.
+
+Previously — **1.10.8** (2026-08-20):
+
+Deploy stops a binding that will break. A method with no term id binds by NAME,
+and a rename in PDC then detaches it silently — drift cannot see it, because
+the contract and the catalog agree about the weak binding. Deploy now refuses,
+names the terms, and says why the ids went missing; the dry run reports instead.
+
+Alongside it, the last mile of the pipeline arrives: **read-back**. What did
+identification actually tag (`/api/pdc/identified`, judged against the Registry),
+what does PDC hold on one entity (`/api/pdc/entity`, features verbatim), and a
+switch to **disable the shipped built-ins** so a run means what it says.
+
+Previously — **1.10.7** (2026-08-19):
 
 Connect first, and delete with the same ✕ the Glossary uses. The PDC session
 card now sits ABOVE the Registry list on Load — Reconcile, Deploy and Drift all

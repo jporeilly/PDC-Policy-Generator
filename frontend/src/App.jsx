@@ -186,6 +186,10 @@ export default function App() {
                   onLoaded={(s) => { setSummary(s); setStep(1) }}
                   pdc={pdc}
                   onPdc={setPdc}
+                  onNavigate={(id) => {
+                    const i = STEPS.findIndex((x) => x.id === id)
+                    if (i >= 0 && stepReady[i]) setStep(i)
+                  }}
                 />
               )}
               {step === 1 && summary && <AuthorPage summary={summary} />}
@@ -194,7 +198,11 @@ export default function App() {
                                pdc={pdc} onNavigate={() => setStep(0)} />
               )}
               {step === 3 && summary && (
-                <DeployPage summary={summary} pdc={pdc} onPdc={setPdc} />
+                <DeployPage summary={summary} pdc={pdc} onPdc={setPdc}
+                            onNavigate={(id) => {
+                              const i = STEPS.findIndex((x) => x.id === id)
+                              if (i >= 0 && stepReady[i]) setStep(i)
+                            }} />
               )}
               {step === 4 && summary && (
                 <DriftPage summary={summary} pdc={pdc} onPdc={setPdc} />

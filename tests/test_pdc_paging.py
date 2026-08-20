@@ -88,3 +88,42 @@ class TestHostileServers:
         monkeypatch.setattr(pdc, "graphql", boom)
         with pytest.raises(RuntimeError):
             pdc.list_methods("https://pdc", "tok")
+
+
+class TestTableColumns:
+    """Columns are found by PARENT, never by name (1.10.8).
+
+    The first cut filtered COLUMN entities by the table's name, which returns
+    nothing — a column is not called after its table — and the read-back
+    cheerfully reported "0 columns" for two tables that plainly have them. The
+    API-level tests could not catch it: they stub table_columns itself.
+    """
+
+    def _server(self, monkeypatch, calls):
+        def fake_filter(base, token, filters, version="v3", verify_tls=True, timeout=30):
+            calls.append(filters)
+            if filters.get("types") == ["TABLE", "VIEW"]:
+                return [{"_id": "t-1", "attributes": {"name": "customers"}}]
+            return [{"_id": "c-1", "attributes": {
+                "name": "account_number", "qualifiedName": "public.customers.account_number",
+                "businessTerms": [{"name": "Account Number"}], "tags": [{"name": "pii"}]}}]
+        monkeypatch.setattr(pdc, "filter_entities", fake_filter)
+
+    def test_resolves_the_table_then_lists_its_children(self, monkeypatch):
+        calls = []
+        self._server(monkeypatch, calls)
+        cols = pdc.table_columns("https://pdc", "tok", "customers")
+        assert [c["name"] for c in cols] == ["account_number"]
+        assert calls[0]["names"] == ["customers"], "first: find the table"
+        assert calls[1]["parentIds"] == ["t-1"], "then: its children, by parent"
+        assert "names" not in calls[1], "a column is never named after its table"
+
+    def test_carries_terms_and_tags_through(self, monkeypatch):
+        self._server(monkeypatch, [])
+        col = pdc.table_columns("https://pdc", "tok", "customers")[0]
+        assert col["business_terms"] == ["Account Number"] and col["tags"] == ["pii"]
+
+    def test_unknown_table_is_empty_not_an_error(self, monkeypatch):
+        monkeypatch.setattr(pdc, "filter_entities",
+                            lambda *a, **k: [])
+        assert pdc.table_columns("https://pdc", "tok", "nope") == []

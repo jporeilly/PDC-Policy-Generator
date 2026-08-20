@@ -104,11 +104,46 @@ class DeployRequest(BaseModel):
     dry_run: bool = False
     bind: bool = True          # re-stamp Registry term ids after import
     wait_seconds: int = 120    # per import worker
+    allow_name_binding: bool = False   # deploy anyway, with weak bindings
+
+
+class BuiltInsRequest(BaseModel):
+    enabled: bool = False       # False disables the built-ins, True restores them
+    dry_run: bool = True        # a 137-method write is never the default
+    kind: str | None = None     # "Dictionary" | "DataPattern"; both when absent
+
+
+class EntityLookupRequest(BaseModel):
+    q: str                      # a table/file name, or part of one
+    limit: int = 25
+
+
+class EntityDetailRequest(BaseModel):
+    id: str | None = None       # an entity id, when you have one
+    name: str | None = None     # or a name to look up first
+    raw: bool = False           # include the whole payload, not just the summary
+
+
+class MethodDetailRequest(BaseModel):
+    name: str | None = None     # method name, e.g. "USA_SSN"
+    id: str | None = None       # or its _id
+    kind: str | None = None     # "DataPattern" | "Dictionary"; inferred when absent
+
+
+class JobStatusRequest(BaseModel):
+    id: str | None = None       # a job id from /api/pdc/identify
+    recent: int = 0             # or list the N most recent workers instead
+
+
+class IdentifiedRequest(BaseModel):
+    tables: list[str]           # table names, e.g. ["customers"]
+    prefix: str | None = None   # the authored set to judge against
 
 
 class IdentifyRequest(BaseModel):
     prefix: str
     scope: list[str]           # entity ids the bulk job is limited to
+    allow_stale_profile: bool = False   # run anyway against an old profile
 
 
 class DriftRequest(BaseModel):
@@ -301,6 +336,7 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
     # concepts land in their own calm bucket, never the amber seed one.
     return {
         "prefix": art["prefix"],
+        "ambiguous_shapes": art.get("ambiguous_shapes") or [],
         "patterns": [_pat(p) for p in art["patterns"]],
         "dictionaries": [_dic(d) for d in art["dictionaries"]],
         "skipped": [dict(s, bucket=("mapping_only" if s.get("intent") == "mapping_only"
@@ -534,6 +570,27 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
         raise HTTPException(status_code=400,
                             detail="a name prefix of at least 2 characters is required — "
                                    "deploy is always scoped so retire can clean it up")
+    # A method with no term id binds by NAME, and a rename in PDC then detaches
+    # it silently. That is not a warning, it is a defect being deployed: on
+    # 2026-08-19 a run went out with 40 of 115 bound by name because Reconcile's
+    # ids live in memory and a restart had discarded them between the two steps.
+    # Nothing downstream would have told anyone. Deploy is the last moment the
+    # app can see it, so it stops here unless the caller insists.
+    # The dry run is exempt: it writes nothing, and it is precisely how a
+    # steward is meant to FIND this before deploying. It reports the count
+    # instead (see the plan payload below).
+    nameless = [e for e in drift_mod.expected_methods(art) if not e.get("term_id")]
+    if nameless and not body.dry_run and not body.allow_name_binding:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"{len(nameless)} of {len(drift_mod.expected_methods(art))} method(s) have no "
+                    f"term id and would bind by NAME, which breaks the moment a term is renamed "
+                    f"in PDC. Run Reconcile, then Apply, then deploy in the SAME session — the "
+                    f"applied ids live in memory, not in the Registry file. "
+                    f"First few: {', '.join(e['term'] for e in nameless[:5])}"
+                    + (f" (+{len(nameless) - 5} more)" if len(nameless) > 5 else "")
+                    + ". To deploy anyway, set allow_name_binding: true."))
+
     expected = drift_mod.expected_methods(art)
 
     try:
@@ -550,7 +607,16 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
                 for e in expected]
         return {"prefix": prefix, "dry_run": True, "rows": rows,
                 "counts": {"create": sum(1 for r in rows if r["action"] == "create"),
-                           "update": sum(1 for r in rows if r["action"] == "update")}}
+                           "update": sum(1 for r in rows if r["action"] == "update")},
+                # what a real deploy would refuse over, stated up front
+                "name_binding": {
+                    "count": len(nameless),
+                    "terms": [e["term"] for e in nameless[:10]],
+                    "blocks_deploy": bool(nameless),
+                    "why": ("these method(s) carry no term id and would bind by name, which "
+                            "breaks when a term is renamed in PDC — Reconcile, Apply and deploy "
+                            "in one session fixes it") if nameless else None,
+                }}
 
     # one importer worker per artifact kind, exactly like the UI's zip upload
     workers = []
@@ -625,6 +691,28 @@ def api_pdc_identify(body: IdentifyRequest) -> dict:
         raise HTTPException(status_code=400,
                             detail="an entity-id scope is required — identification "
                                    "jobs are never catalog-wide from here")
+    # Patterns match against the PROFILE, not the live table. A scope whose
+    # profile predates the data is the difference between 9 tagged columns and
+    # 1 — same methods, same job, proven on this estate. Report it before the
+    # run rather than leaving a silent no-op to be discovered by reading back.
+    profiled, stale = {}, []
+    for eid in body.scope:
+        try:
+            when = _with_pdc(p, lambda tok, e=eid: pdc_mod.profiled_at(
+                p["base"], tok, e, verify_tls=p["verify_tls"]))
+        except Exception:
+            when = None
+        profiled[eid] = when
+        if not when:
+            stale.append({"entity": eid, "profiled_at": None})
+    if stale and not body.allow_stale_profile:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"{len(stale)} entity/entities in scope have never been profiled. "
+                    f"Identification matches patterns against the stored profile, so "
+                    f"they would tag nothing. Profile them in PDC first, or set "
+                    f"allow_stale_profile: true."))
+
     try:
         methods = [m for m in _with_pdc(p, lambda tok: pdc_mod.list_methods(
                        p["base"], tok, prefix=prefix, verify_tls=p["verify_tls"]))
@@ -638,7 +726,339 @@ def api_pdc_identify(body: IdentifyRequest) -> dict:
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"identification job failed: {e}")
-    return {"job_id": job_id, "methods": len(methods), "scope": len(body.scope)}
+    return {"job_id": job_id, "methods": len(methods), "scope": len(body.scope),
+            "profiled": [{"entity": e, "profiled_at": profiled.get(e)}
+                         for e in body.scope]}
+
+
+@app.post("/api/pdc/method")
+def api_pdc_method(body: MethodDetailRequest) -> dict:
+    """One Data Identification method, whole, by name or id.
+
+    PDC's own objects are the specification: the import envelope was learned by
+    reading an export rather than guessing, and the same trick applies to
+    matching behaviour. Reading a BUILT-IN pattern beside one of ours is how you
+    find the field that makes the difference between a rule that fires and a
+    rule that sits there.
+    """
+    p = _require_pdc()
+    kind, mid = (body.kind or "").strip() or None, (body.id or "").strip()
+    if not mid:
+        nm = (body.name or "").strip()
+        if not nm:
+            raise HTTPException(status_code=400, detail="give a method name or id")
+        try:
+            rows = _with_pdc(p, lambda tok: pdc_mod.list_methods(
+                p["base"], tok, verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"method list failed: {e}")
+        hit = next((m for m in rows if str(m["name"]).lower() == nm.lower()), None)
+        if not hit:
+            raise HTTPException(status_code=404, detail=f"no method named {nm!r}")
+        mid, kind = hit["_id"], hit["kind"]
+    if not kind:
+        raise HTTPException(status_code=400, detail="kind is required when giving an id")
+    try:
+        return {"kind": kind, "method": _with_pdc(p, lambda tok: pdc_mod.get_method(
+            p["base"], tok, kind, mid, verify_tls=p["verify_tls"]))}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"method read failed: {e}")
+
+
+@app.post("/api/pdc/job")
+def api_pdc_job(body: JobStatusRequest | None = None) -> dict:
+    """What became of a job this app started, or what PDC has been doing lately.
+
+    Identification could be fired and then not followed: the outcome lived in
+    PDC's Workers page and nowhere this app could reach. `id` reports one job,
+    including the per-job lines that say whether the scope was covered
+    ("Completed Total 2 of 2"); `recent` lists the last N worker processes for
+    when the id is not to hand, which is most of the time.
+    """
+    p = _require_pdc()
+    body = body or JobStatusRequest()
+    if body.recent:
+        try:
+            rows = _with_pdc(p, lambda tok: pdc_mod.recent_workers(
+                p["base"], tok, limit=min(max(body.recent, 1), 50),
+                verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"worker list failed: {e}")
+        return {"recent": rows, "count": len(rows)}
+
+    jid = (body.id or "").strip()
+    if not jid:
+        raise HTTPException(status_code=400, detail="give a job id, or recent: N to list workers")
+    try:
+        return _with_pdc(p, lambda tok: pdc_mod.job_status(
+            p["base"], tok, jid, verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"job status failed: {e}")
+
+
+@app.post("/api/pdc/entity")
+def api_pdc_entity(body: EntityDetailRequest) -> dict:
+    """Everything PDC holds on one entity — by id, or by name when you only have
+    that. Read-only, and deliberately not scoped to this app's own objects: when
+    a write looks like it succeeded and the catalog disagrees, the argument is
+    settled by reading the entity back, and that should not require leaving the
+    app for PDC's UI.
+
+    The summary pulls the fields that carry governance state (rating, quality,
+    sensitivity, lineage flags, terms, labels); `raw` returns the payload whole
+    for anything the summary does not name.
+    """
+    p = _require_pdc()
+    eid = (body.id or "").strip()
+    if not eid:
+        nm = (body.name or "").strip()
+        if len(nm) < 2:
+            raise HTTPException(status_code=400, detail="give an entity id, or a name to look up")
+        try:
+            hits = _with_pdc(p, lambda tok: pdc_mod.filter_entities(
+                p["base"], tok, {"names": [nm]}, verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"entity lookup failed: {e}")
+        match = next((h for h in (hits or [])
+                      if str(((h.get("attributes") or {}).get("name")) or h.get("name") or "").lower()
+                      == nm.lower()), None) or (hits or [None])[0]
+        if not match:
+            raise HTTPException(status_code=404, detail=f"nothing in the catalog is named {nm!r}")
+        eid = pdc_mod._eid(match)
+
+    try:
+        ent = _with_pdc(p, lambda tok: pdc_mod.get_entity(
+            p["base"], tok, eid, verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"entity read failed: {e}")
+
+    attrs = ent.get("attributes") or {}
+    feats = attrs.get("features") or {}
+    out = {
+        "id": eid,
+        "name": attrs.get("name") or ent.get("name"),
+        "type": attrs.get("type") or ent.get("type"),
+        "path": attrs.get("qualifiedName") or attrs.get("path"),
+        # features verbatim: the point is to see the SHAPE PDC stores, so a
+        # rating is not flattened to a number on the way out
+        "features": feats,
+        "rating": feats.get("rating"),
+        "business_terms": [ (b or {}).get("name") for b in (attrs.get("businessTerms") or []) if b ],
+        "custom_properties": attrs.get("customProperties") or [],
+    }
+    if body.raw:
+        out["entity"] = ent
+    return out
+
+
+@app.post("/api/pdc/identified")
+def api_pdc_identified(body: IdentifiedRequest) -> dict:
+    """What identification actually DID, column by column.
+
+    Deploy proves the methods landed; drift proves they still match the
+    contract; neither answers "did a rule ever fire against real data". This
+    reads the columns back and judges each against the Registry, so the answer
+    is a verdict rather than a browse:
+
+      expected_tagged   the contract says this column's term, and PDC agrees
+      expected_missing  the contract expected it and PDC has nothing
+      unexpected        PDC bound a term the contract does not claim here
+      untouched         no term, and none was expected
+
+    `expected_missing` is the interesting one: a rule that deployed cleanly and
+    then failed to fire is invisible everywhere else in this app.
+    """
+    _require_registry()
+    p = _require_pdc()
+    art = _author_or_400((body.prefix or "").strip() or None)
+
+    # what the contract claims for each physical column, from the authored set —
+    # both the TERM and the TAGS the method would stamp. The tags matter: a term
+    # on a column proves nothing about identification, because the Glossary's
+    # Apply binds terms too. Tags are what a METHOD applies when it matches, so
+    # they are the fingerprint of a rule having fired.
+    expected, expected_tags = {}, {}
+    authored = {e["term"] for e in drift_mod.expected_methods(art)}
+    tags_by_term = {}
+    for m in (art.get("patterns") or []) + (art.get("dictionaries") or []):
+        rule = (m.get("rule") or {}).get("rules") or [{}]
+        for act in (rule[0].get("actions") or []):
+            for t in (act.get("applyTags") or []):
+                nm = (t or {}).get("name")
+                if nm:
+                    tags_by_term.setdefault(m["term"], set()).add(str(nm).lower())
+    for c in (_state["reg"].get("concepts") or []):
+        if c.get("term_name") not in authored:
+            continue
+        for src in (c.get("sources") or []):
+            col = str(src).split(".")[-1].strip().lower()
+            if col:
+                expected.setdefault(col, set()).add(c["term_name"])
+                expected_tags.setdefault(col, set()).update(
+                    tags_by_term.get(c["term_name"], set()))
+
+    tables, rows = [], []
+    for t in body.tables:
+        t = (t or "").strip()
+        if not t:
+            continue
+        try:
+            cols = _with_pdc(p, lambda tok, t=t: pdc_mod.table_columns(
+                p["base"], tok, t, verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"column read failed for {t}: {e}")
+        keep = cols          # resolved by parent, so every row belongs to this table
+        tables.append({"table": t, "columns": len(keep)})
+        for c in keep:
+            key = str(c["name"]).strip().lower()
+            want = expected.get(key, set())
+            want_tags = expected_tags.get(key, set())
+            got = set(c["business_terms"])
+            got_tags = {str(x).lower() for x in (c["tags"] or [])}
+            if want and (want & got) and (not want_tags or (want_tags & got_tags)):
+                verdict = "expected_tagged"          # the method matched and stamped
+            elif want and (want & got):
+                # the term is there but none of the method's tags are: this is a
+                # term link from Apply, NOT a rule that fired. Counting it as a
+                # match is how today's first read-back flattered the result.
+                verdict = "expected_term_only"
+            elif want:
+                verdict = "expected_missing"
+            elif got:
+                verdict = "unexpected"
+            else:
+                verdict = "untouched"
+            rows.append({"table": t, "column": c["name"], "verdict": verdict,
+                         "expected": sorted(want), "expected_tags": sorted(want_tags),
+                         "bound": sorted(got), "tags": c["tags"]})
+
+    counts = {k: sum(1 for r in rows if r["verdict"] == k)
+              for k in ("expected_tagged", "expected_term_only", "expected_missing",
+                        "unexpected", "untouched")}
+    return {"prefix": art["prefix"], "tables": tables, "counts": counts, "rows": rows}
+
+
+@app.post("/api/pdc/entities")
+def api_pdc_entities(body: EntityLookupRequest) -> dict:
+    """Find catalog entities by name, so an identification scope can be CHOSEN
+    rather than pasted. Deploy asked for raw entity ids, which meant leaving the
+    app, finding a table in PDC, and copying a uuid — the kind of step that
+    turns a scoped job into an unscoped one because scoping was tedious.
+
+    Read-only. Returns {id, name, type, path} for each hit, newest API first."""
+    p = _require_pdc()
+    q = (body.q or "").strip()
+    if len(q) < 2:
+        raise HTTPException(status_code=400, detail="give at least two characters to search for")
+    try:
+        # `names` + `types`, the shape the Glossary's client has used against
+        # this endpoint all along — /filters rejects an unknown `name` property.
+        # TABLE first (what a scope usually means), then the file-ish roots the
+        # estate also holds, so a CSV or JSON source is findable too.
+        rows = []
+        for filt in ({"names": [q], "types": ["TABLE", "VIEW"]},
+                     {"names": [q], "types": ["FILE", "OBJECT", "RESOURCE"]},
+                     {"names": [q]}):
+            try:
+                rows = _with_pdc(p, lambda tok, f=filt: pdc_mod.filter_entities(
+                    p["base"], tok, f, verify_tls=p["verify_tls"]))
+            except HTTPException:
+                raise
+            except Exception:
+                rows = []
+            if rows:
+                break
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"entity lookup failed: {e}")
+
+    out = []
+    for it in rows or []:
+        if not isinstance(it, dict):
+            continue
+        attrs = it.get("attributes") or {}
+        name = attrs.get("name") or it.get("name") or ""
+        if q.lower() not in str(name).lower():
+            continue
+        out.append({"id": pdc_mod._eid(it), "name": name,
+                    "type": attrs.get("type") or it.get("type") or "",
+                    "path": attrs.get("qualifiedName") or attrs.get("path") or ""})
+        if len(out) >= max(1, min(body.limit, 100)):
+            break
+    return {"q": q, "count": len(out), "entities": out}
+
+
+@app.post("/api/pdc/builtins")
+def api_pdc_builtins(body: BuiltInsRequest | None = None) -> dict:
+    """Disable (or restore) PDC's BUILT-IN patterns and dictionaries.
+
+    PDC ships them enabled, and an identification job started anywhere other
+    than this app — PDC's own screen, a schedule, ingest — classifies against
+    whatever is enabled. In a custom-only programme that is the drift risk the
+    programme exists to remove: a built-in shape induced from somebody else's
+    data competing with one induced from this estate.
+
+    Never touches a custom method, so the app can never disable its own
+    authored set by this route. `dry_run` (the default) returns the plan.
+    Reversible: the same call with enabled=true restores them.
+    """
+    p = _require_pdc()
+    body = body or BuiltInsRequest()
+    try:
+        rows = _with_pdc(p, lambda tok: pdc_mod.list_methods(
+            p["base"], tok, verify_tls=p["verify_tls"]))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"method list failed: {e}")
+
+    targets = [m for m in rows if m.get("builtIn")]
+    if body.kind:
+        targets = [m for m in targets if m["kind"] == body.kind]
+    plan = {"prefix": None, "enabled": body.enabled, "dry_run": body.dry_run,
+            "built_in": len(targets), "custom_untouched": len(rows) - len(targets),
+            "by_kind": {k: sum(1 for m in targets if m["kind"] == k)
+                        for k in ("Dictionary", "DataPattern")}}
+    if body.dry_run:
+        plan["rows"] = [{"kind": m["kind"], "name": m["name"], "_id": m["_id"]}
+                        for m in targets]
+        return plan
+
+    results, failed = [], 0
+    for m in targets:
+        try:
+            ok = _with_pdc(p, lambda tok, m=m: pdc_mod.set_method_enabled(
+                p["base"], tok, m["kind"], m["_id"], body.enabled,
+                verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception as e:
+            ok, err = False, str(e)[:200]
+            results.append({"kind": m["kind"], "name": m["name"], "ok": False, "error": err})
+            failed += 1
+            continue
+        results.append({"kind": m["kind"], "name": m["name"], "ok": bool(ok)})
+        if not ok:
+            failed += 1
+    plan["rows"] = results
+    plan["changed"] = sum(1 for r in results if r.get("ok"))
+    plan["failed"] = failed
+    return plan
 
 
 # --------------------------------------------------------------------------- #

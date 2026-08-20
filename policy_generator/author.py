@@ -33,6 +33,20 @@ _NS = uuid.uuid5(uuid.NAMESPACE_URL, "pdc-policy-generator")
 # structural vocabulary a policy should not stamp on its own
 _SKIP_TAGS = {"maskable", "identifier", "record", "table-level"}
 
+# Types whose VALUES PDC cannot content-match. It evaluates a pattern's regex
+# and a dictionary's vocabulary against a column's values; a bit column has none
+# to evaluate. Proven live 2026-08-20 — two BIT columns tagged nothing under a
+# regex AND under a hand-built {0,1} dictionary, while every NUMERIC sibling
+# tagged correctly. The Registry stops seeding these from 1.38.34; this is the
+# belt to that braces, because an older contract will still offer them.
+_BOOLEAN_TYPES = {"bit", "bool", "boolean", "tinyint(1)"}
+
+
+def _is_boolean_concept(concept):
+    types = [str(v or "").strip().lower() for v in (concept.get("source_types") or {}).values()]
+    types = [t for t in types if t]
+    return bool(types) and all(t in _BOOLEAN_TYPES for t in types)
+
 
 def _slug(s):
     return _NON.sub("_", str(s or "")).strip("_").lower() or "term"
@@ -141,8 +155,18 @@ def _pattern_def(name, description, category, col_rx, signature, content_rx,
             # provide is therefore not available to patterns; the name-AND-shape
             # conjunction in the 0.5/0.5 blend against the 0.7 gate is what
             # keeps such a rule honest.
+            # The threshold is a STRING, and that is not cosmetic. PDC's
+            # JsonLogic evaluator does not coerce: a rule comparing
+            # confidenceScore against the NUMBER 0.5 never becomes true, so the
+            # method imports cleanly, reports drift-clean, and silently never
+            # fires. Live-proven on 2026-08-20 — our dictionaries (string
+            # thresholds) tagged columns in the same identification run where
+            # every pattern (numeric) tagged nothing, and PDC's own built-in
+            # USA_SSN pattern gates on "0.5". Failing at MATCH time makes this
+            # worse than the columnCardinality bug, which at least was rejected
+            # at import.
             "condition": {"and": [{">=": [{"var": "confidenceScore"},
-                                          0.7 if named else 0.5]}]},
+                                          "0.7" if named else "0.5"]}]},
             "actions": _actions(tags, term, term_id),
         }],
         "categories": [category],
@@ -236,6 +260,13 @@ def author(reg: dict, prefix: str = None) -> dict:
             continue
         col_rx = column_name_regex(c.get("sources"))
         tags = _rule_tags(c, allow)
+        if _is_boolean_concept(c):
+            skipped.append({"term": term,
+                            "why": "boolean column — PDC matches patterns and dictionaries "
+                                   "against column VALUES, and a bit column has none, so any "
+                                   "method here would import, pass drift, and never fire; "
+                                   "governed by the term↔column link instead"})
+            continue
         if not tags:
             # PDC's import validator rejects a rule with no tag — and a method
             # that stamps nothing governs nothing. Fix the tags glossary-side.
@@ -275,7 +306,21 @@ def author(reg: dict, prefix: str = None) -> dict:
                                             len(seed["values"])),
                     "csv": "Term\n" + "\n".join(str(v) for v in seed["values"]) + "\n",
                 })
+    # A content regex claimed by more than one method identifies none of them:
+    # on the Arizona estate one induced shape backed EIGHT concepts, and a
+    # free-text column came back bound to all eight. The Registry now marks such
+    # seeds name-anchored (1.38.34), but a Registry written before that — or by
+    # anything else — still can, so say so where a steward will see it.
+    by_regex = {}
+    for pat in patterns:
+        rx = ((pat["rule"].get("regexMatch") or {}).get("regex") or [None])[0]
+        if rx:
+            by_regex.setdefault(rx, []).append(pat["term"])
+    ambiguous = [{"regex": rx, "terms": sorted(t)}
+                 for rx, t in by_regex.items() if len(t) > 1]
+
     return {"patterns": patterns, "dictionaries": dictionaries, "skipped": skipped,
+            "ambiguous_shapes": ambiguous,
             "glossary": reg.get("glossary"), "prefix": prefix}
 
 

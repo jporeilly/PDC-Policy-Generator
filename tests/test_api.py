@@ -257,7 +257,9 @@ class TestDeployFlow:
 
     def test_deploy_uploads_binds_and_verifies(self, api_client, registry_file, fake_pdc):
         client = self._ready(api_client, registry_file)
-        body = client.post("/api/pdc/deploy", json={}).json()
+        # the fixture Registry deliberately mixes an id-resolved concept with an
+        # unresolved one, so this deploy has to opt past the name-binding guard
+        body = client.post("/api/pdc/deploy", json={"allow_name_binding": True}).json()
 
         # payload shape: one zip per kind, in the export layout author produces
         kinds = {u["kind"]: u for u in fake_pdc["uploads"]}
@@ -341,3 +343,270 @@ class TestRegistryDelete:
         assert res.status_code == 400
         assert "scoped" in res.json()["detail"]
         assert victim.exists(), "an unlisted path must survive"
+
+
+class TestBuiltIns:
+    """Disabling PDC's built-in methods (1.10.8).
+
+    PDC ships them enabled, so anything that starts identification outside this
+    app — its own screen, a schedule, ingest — classifies against shapes induced
+    from somebody else's data. A custom-only programme wants them quiet.
+    """
+
+    def _client(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        return loaded_client(api_client, registry_file)
+
+    def _connect(self, client):
+        res = client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        assert res.status_code == 200, res.text
+
+    def test_dry_run_is_the_default_and_writes_nothing(self, api_client, registry_file, fake_pdc):
+        client = self._client(api_client, registry_file)
+        self._connect(client)
+        body = client.post("/api/pdc/builtins", json={}).json()
+        assert body["dry_run"] is True
+        assert body["built_in"] == 1                 # only m3 is builtIn
+        assert body["custom_untouched"] == 3
+        assert [r["name"] for r in body["rows"]] == ["Claims Builtin Clone"]
+        assert fake_pdc["enabled"] == [], "a dry run must not write"
+
+    def test_disable_touches_only_built_ins(self, api_client, registry_file, fake_pdc):
+        client = self._client(api_client, registry_file)
+        self._connect(client)
+        body = client.post("/api/pdc/builtins",
+                           json={"enabled": False, "dry_run": False}).json()
+        assert body["changed"] == 1 and body["failed"] == 0
+        assert fake_pdc["enabled"] == [{"kind": "DataPattern", "_id": "m3", "enabled": False}], \
+            "the app must never disable a method it authored"
+
+    def test_restore_is_the_same_call(self, api_client, registry_file, fake_pdc):
+        client = self._client(api_client, registry_file)
+        self._connect(client)
+        client.post("/api/pdc/builtins", json={"enabled": True, "dry_run": False})
+        assert fake_pdc["enabled"][-1]["enabled"] is True
+
+    def test_needs_a_session(self, api_client, registry_file):
+        client = self._client(api_client, registry_file)
+        assert client.post("/api/pdc/builtins", json={}).status_code == 400
+
+
+class TestIdentifiedReadBack:
+    """What identification actually did, column by column (1.10.8).
+
+    Deploy proves a method LANDED; drift proves it still matches the contract.
+    Neither notices a rule that deployed cleanly and then never fired — which is
+    exactly what `expected_missing` is for.
+    """
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        res = client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        assert res.status_code == 200, res.text
+        return client
+
+    def test_verdict_per_column(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/identified",
+                           json={"tables": ["customers"], "prefix": "Claims"}).json()
+        v = {r["column"]: r["verdict"] for r in body["rows"]}
+        assert v["mbr_no"] == "expected_tagged",             "the method's own tag is on the column — a rule actually fired"
+        assert v["state"] == "expected_missing", "deployed but never fired — the point of this view"
+        assert v["notes"] == "unexpected", "PDC bound a term the contract does not claim here"
+        assert v["filler"] == "untouched"
+        assert body["counts"]["expected_missing"] == 1
+        assert "expected_term_only" in body["counts"],             "a term with none of the method's tags is an Apply link, not a match"
+
+    def test_reports_the_terms_on_both_sides(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        rows = client.post("/api/pdc/identified",
+                           json={"tables": ["customers"], "prefix": "Claims"}).json()["rows"]
+        got = next(r for r in rows if r["column"] == "mbr_no")
+        assert got["expected"] == ["Member Number"] and got["bound"] == ["Member Number"]
+
+    def test_needs_a_registry_and_a_session(self, api_client):
+        assert api_client.post("/api/pdc/identified", json={"tables": ["x"]}).status_code == 400
+
+
+class TestEntityDetail:
+    """Reading one entity back (1.10.8) — the capability that settles 'the write
+    said 200 but the catalog disagrees' without leaving the app."""
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        return client
+
+    def test_features_come_back_verbatim(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/entity", json={"id": "e-1"}).json()
+        assert body["rating"] == {"value": 4, "users": {"u-1": 4}}, \
+            "the SHAPE is the answer — a rating must not be flattened on the way out"
+        assert body["features"]["qualityScore"] == 91
+        assert body["business_terms"] == ["Customer Record"]
+
+    def test_finds_by_name_when_no_id_is_known(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/entity", json={"name": "Claims Member Number"}).json()
+        assert body["id"], "a name lookup should still yield an entity"
+
+    def test_raw_is_opt_in(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        assert "entity" not in client.post("/api/pdc/entity", json={"id": "e-1"}).json()
+        assert "entity" in client.post("/api/pdc/entity", json={"id": "e-1", "raw": True}).json()
+
+    def test_needs_a_session(self, api_client, registry_file, fake_pdc):
+        # fake_pdc matters even here: without it the connect call reaches for a
+        # real host and the test spends ten seconds failing to resolve it
+        client = self._ready(api_client, registry_file)
+        from policy_generator import api as api_mod
+        api_mod._state["pdc"] = None
+        assert client.post("/api/pdc/entity", json={"id": "e-1"}).status_code == 400
+
+
+class TestNameBindingGuard:
+    """Deploy refuses to ship methods that would bind by name (1.10.8).
+
+    Field history: a run on 2026-08-19 deployed 115 methods of which 40 bound by
+    name, because Reconcile's applied ids live in memory and a restart between
+    the two steps discarded them. Nothing downstream noticed — drift compares
+    what was deployed against the contract, and both agreed on the weak binding.
+    Deploy is the last moment the app can see it.
+    """
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        return client
+
+    def test_blocks_a_real_deploy(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        res = client.post("/api/pdc/deploy", json={})
+        assert res.status_code == 409
+        detail = res.json()["detail"]
+        assert "bind by NAME" in detail
+        assert "State Code" in detail, "name the terms, so the fix is obvious"
+        assert "same session" in detail.lower(), "say WHY the ids went missing"
+        assert fake_pdc["uploads"] == [], "nothing may reach PDC"
+
+    def test_the_dry_run_reports_instead_of_refusing(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/deploy", json={"dry_run": True}).json()
+        assert body["name_binding"]["count"] == 1
+        assert body["name_binding"]["blocks_deploy"] is True
+        assert "State Code" in body["name_binding"]["terms"]
+
+    def test_explicit_opt_in_deploys(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        res = client.post("/api/pdc/deploy", json={"allow_name_binding": True})
+        assert res.status_code == 200 and res.json()["counts"]["imported"] == 2
+
+    def test_silent_when_everything_is_bound(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        client.post("/api/reconcile", json={})
+        client.post("/api/reconcile/apply")
+        res = client.post("/api/pdc/deploy", json={})
+        assert res.status_code == 200, "reconciled ids make the guard invisible"
+
+
+class TestJobStatus:
+    """Following a job the app started (1.10.8). Identification could be fired
+    and then not followed — the outcome lived in PDC's Workers page and nowhere
+    this app could reach."""
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        return client
+
+    def test_reports_a_job_and_its_per_job_lines(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/job", json={"id": "job-1"}).json()
+        assert body["status"] == "COMPLETED"
+        assert body["jobs"][0]["statistics"] == {"TOTAL": 2, "COMPLETED": 2}, \
+            "the statistics are the part that says whether the scope was covered"
+
+    def test_lists_recent_workers_when_no_id_is_held(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/job", json={"recent": 5}).json()
+        assert body["count"] == 1 and body["recent"][0]["label"] == "Identifying Data"
+
+    def test_needs_an_id_or_a_count(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        assert client.post("/api/pdc/job", json={}).status_code == 400
+
+
+class TestMethodDetail:
+    """Reading one method back (1.10.8). PDC's own objects are the specification:
+    a built-in read beside one of ours is how the difference gets found."""
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        return client
+
+    def test_reads_by_name_and_infers_the_kind(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/method", json={"name": "Claims Member Number"}).json()
+        assert body["kind"] == "DataPattern"
+        assert body["method"]["regexMatch"]["regex"] == ["^MBR-\d{6}$"]
+
+    def test_unknown_name_is_a_404(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        assert client.post("/api/pdc/method", json={"name": "nope"}).status_code == 404
+
+
+class TestProfileFreshness:
+    """Identification matches patterns against the stored PROFILE (1.10.8).
+
+    Proven on 2026-08-20: the same 55 methods, in the same job, tagged 9 columns
+    in a freshly profiled table and 1 in a stale one. A never-profiled scope
+    would tag nothing at all, silently — so the app says so first.
+    """
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        return client
+
+    def test_refuses_a_scope_that_was_never_profiled(self, api_client, registry_file,
+                                                     fake_pdc, monkeypatch):
+        from policy_generator import api as api_mod
+        monkeypatch.setattr(api_mod.pdc_mod, "profiled_at", lambda *a, **k: None)
+        client = self._ready(api_client, registry_file)
+        res = client.post("/api/pdc/identify", json={"prefix": "Claims", "scope": ["e-1"]})
+        assert res.status_code == 409
+        assert "profiled" in res.json()["detail"]
+        assert fake_pdc["jobs"] == [], "no job may be started against a blind scope"
+
+    def test_runs_and_reports_the_profile_date(self, api_client, registry_file,
+                                               fake_pdc, monkeypatch):
+        from policy_generator import api as api_mod
+        monkeypatch.setattr(api_mod.pdc_mod, "profiled_at",
+                            lambda *a, **k: "2026-08-20T09:00:00Z")
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/identify",
+                           json={"prefix": "Claims", "scope": ["e-1"]}).json()
+        assert body["profiled"][0]["profiled_at"] == "2026-08-20T09:00:00Z"
+        assert len(fake_pdc["jobs"]) == 1
+
+    def test_explicit_opt_in_runs_anyway(self, api_client, registry_file, fake_pdc, monkeypatch):
+        from policy_generator import api as api_mod
+        monkeypatch.setattr(api_mod.pdc_mod, "profiled_at", lambda *a, **k: None)
+        client = self._ready(api_client, registry_file)
+        res = client.post("/api/pdc/identify", json={
+            "prefix": "Claims", "scope": ["e-1"], "allow_stale_profile": True})
+        assert res.status_code == 200
