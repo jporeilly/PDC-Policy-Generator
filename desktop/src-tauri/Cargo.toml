@@ -1,6 +1,6 @@
 [package]
 name = "pdc-policy-desktop"
-version = "1.10.9"
+version = "1.10.10"
 description = "Desktop shell for the PDC Policy Generator"
 edition = "2021"
 rust-version = "1.77"

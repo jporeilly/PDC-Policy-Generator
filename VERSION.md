@@ -1,6 +1,13 @@
 # Version
 
-**1.10.9** — 2026-08-20
+**1.10.10** — 2026-08-21
+
+The Load overview now explains the five stages as tiles — numbered dot, title,
+explanation and a Go-to button per stage, the Glossary Generator's Home
+treatment — so the suite's two halves read the same way. Report stays
+unnumbered: it is not a step but the account of the other five.
+
+Previously — **1.10.9** (2026-08-20):
 
 The day the pipeline was proven end to end on a live estate — and the four
 silent failures that turned up on the way. A numeric threshold meant no Data

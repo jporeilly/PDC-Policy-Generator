@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.10.10] — 2026-08-21
+
+### Changed — the Load overview explains the stages as tiles
+
+The "five stages" card under the workflow diagram now lays the stages out as
+tiles — numbered dot, title, explanation, and a **Go to** button that jumps
+straight to the page — the same treatment the Glossary Generator's Home page
+uses, so the two apps read as one suite. Load itself is marked *You are here*,
+and Report keeps its "not a step but a read" status with an unnumbered marker.
+The prose is unchanged; only its shape moved.
+
 ## [1.10.9] — 2026-08-20
 
 ### Fixed — the threshold type that stopped every pattern from firing

@@ -2,6 +2,37 @@ import { useEffect, useState } from 'react'
 import PdcConnect from '../components/PdcConnect.jsx'
 import WorkflowDiagram from '../components/WorkflowDiagram.jsx'
 
+// The five stages plus the Report read-out, tiled the same way the Glossary
+// Generator's Home page explains its workflow. Report carries no number on
+// purpose: it is not a stage, it is the account of the other five.
+const STAGES = [
+  { n: 1, id: 'load', title: 'Load', go: 'Load',
+    text: 'Open the Classification Registry the Glossary Generator wrote at Generate. '
+        + 'One governed row per concept: term, tags, sensitivity, detection seeds. '
+        + 'Everything downstream reads this and nothing re-decides it.' },
+  { n: 2, id: 'author', title: 'Author', go: 'Author',
+    text: 'Turn each seeded row into an import-ready PDC method: a Data Pattern for a '
+        + 'value shape, a Dictionary for a reference list. Deterministic and offline, '
+        + 'so the same Registry always yields the same rules.' },
+  { n: 3, id: 'reconcile', title: 'Reconcile', go: 'Reconcile',
+    text: 'Look every term up in the live catalog and bind by id rather than by name, '
+        + 'so a rename in PDC can never quietly unhook a method from its term. Needs a '
+        + 'session; the ids it applies live in memory until you deploy or export.' },
+  { n: 4, id: 'deploy', title: 'Deploy', go: 'Deploy',
+    text: 'Import the authored set over PDC’s own import API, verify each method '
+        + 'landed, and re-stamp the reconciled term ids afterwards. Everything stays '
+        + 'under the name prefix, which is what lets Retire clean up exactly what this '
+        + 'app created.' },
+  { n: 5, id: 'drift', title: 'Drift', go: 'Drift',
+    text: 'Read the catalog back and compare it against the Registry, method by method: '
+        + 'clean, drifted (deployed but changed), missing (governed but absent), '
+        + 'orphaned (deployed but no longer governed). This is the stage the whole '
+        + 'pipeline exists for.' },
+  { n: null, id: 'report', title: 'Report', go: 'Report',
+    text: 'Not a step but a read: the contract, the authored set and the live catalog '
+        + 'in one account, exportable as a standalone HTML file.' },
+]
+
 export default function LoadPage({ summary, onLoaded, pdc, onPdc, onNavigate }) {
   const [registries, setRegistries] = useState([])
   const [error, setError] = useState(null)
@@ -80,38 +111,19 @@ export default function LoadPage({ summary, onLoaded, pdc, onPdc, onNavigate }) 
           what Drift reports back about the live catalog.
         </p>
         <WorkflowDiagram onNavigate={onNavigate} />
-        <ul className="workcycle">
-          <li>
-            <b>Load</b> — open the Classification Registry the Glossary Generator wrote at
-            Generate. One governed row per concept: term, tags, sensitivity, detection seeds.
-            Everything downstream reads this and nothing re-decides it.
-          </li>
-          <li>
-            <b>Author</b> — turn each seeded row into an import-ready PDC method: a Data Pattern
-            for a value shape, a Dictionary for a reference list. Deterministic and offline, so
-            the same Registry always yields the same rules.
-          </li>
-          <li>
-            <b>Reconcile</b> — look every term up in the live catalog and bind by <i>id</i> rather
-            than by name, so a rename in PDC can never quietly unhook a method from its term.
-            Needs a session; the ids it applies live in memory until you deploy or export.
-          </li>
-          <li>
-            <b>Deploy</b> — import the authored set over PDC's own import API, verify each method
-            landed, and re-stamp the reconciled term ids afterwards. Everything stays under the
-            name prefix, which is what lets Retire clean up exactly what this app created.
-          </li>
-          <li>
-            <b>Drift</b> — read the catalog back and compare it against the Registry, method by
-            method: <b>clean</b>, <b>drifted</b> (deployed but changed), <b>missing</b> (governed
-            but absent), <b>orphaned</b> (deployed but no longer governed). This is the stage the
-            whole pipeline exists for.
-          </li>
-          <li>
-            <b>Report</b> — not a step but a read: the contract, the authored set and the live
-            catalog in one account, exportable as a standalone HTML file.
-          </li>
-        </ul>
+        <div className="grid-2" style={{ marginTop: '.8rem' }}>
+          {STAGES.map((s) => (
+            <div className="tile" key={s.id}>
+              <div className="bucket-title">
+                <span className={`dot-num${s.n == null ? ' aside' : ''}`}>{s.n ?? '→'}</span> {s.title}
+              </div>
+              <p className="hint-line">{s.text}</p>
+              {s.id === 'load'
+                ? <span className="you-are-here">You are here</span>
+                : <button className="ghost" onClick={() => onNavigate(s.id)}>Go to {s.go} →</button>}
+            </div>
+          ))}
+        </div>
       </details>
 
       <RegistryContractExplainer />
