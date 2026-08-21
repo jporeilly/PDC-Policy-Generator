@@ -2,6 +2,22 @@
 
 ## [1.10.11] - 2026-08-21
 
+### Fixed - a dictionary value with a comma in it killed the import
+
+Deploy reported COMPLETED and 18 of 31 dictionaries were not in the catalog.
+The emitter built the one-column values CSV by joining values with newlines,
+and `water_systems.conservation_focus` holds "Expanding metro area, new
+customer acquisition, infrastructure growth". PDC's importer read a 1-column
+header, hit a 3-field row, threw CSVFieldNumDifferentException - and abandoned
+the REST OF THE ZIP. The 13 dictionaries queued before the bad row landed; the
+18 after it did not; the worker still reported COMPLETED, which is the failure
+mode pdc.py already warns about two functions above the one that hit it.
+
+Both emitters now write RFC 4180 through csv.writer - the dictionary values
+and INDEX.csv, where a term name carrying a comma would shift every column
+after it. Tested against the values that actually broke it, plus quotes and
+embedded newlines.
+
 ### Fixed - a Disable button that was disabled
 
 "Disable built-ins" and "Restore" sat `disabled` until "Count them" had been

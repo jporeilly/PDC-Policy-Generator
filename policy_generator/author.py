@@ -25,7 +25,7 @@ timestamps vary between runs. Nothing here talks to PDC — output is files
 a steward reviews.
 """
 from __future__ import annotations
-import io, json, re, time, uuid, zipfile
+import csv, io, json, re, time, uuid, zipfile
 
 _NON = re.compile(r"[^A-Za-z0-9]+")
 _NS = uuid.uuid5(uuid.NAMESPACE_URL, "pdc-policy-generator")
@@ -304,7 +304,7 @@ def author(reg: dict, prefix: str = None) -> dict:
                     "rule": _dictionary_def(name, desc, category, col_rx, tags, term,
                                             c.get("term_id"), f"{slug}.csv",
                                             len(seed["values"])),
-                    "csv": "Term\n" + "\n".join(str(v) for v in seed["values"]) + "\n",
+                    "csv": _csv([("Term",)] + [(str(v),) for v in seed["values"]]),
                 })
     # A content regex claimed by more than one method identifies none of them:
     # on the Arizona estate one induced shape backed EIGHT concepts, and a
@@ -350,13 +350,37 @@ def dictionaries_zip_bytes(art: dict) -> bytes:
     return buf.getvalue()
 
 
+def _csv(rows) -> str:
+    """RFC 4180 CSV. Values are DATA, and estate data contains commas.
+
+    The dictionary CSV is one column, and joining the values with newlines
+    split a value like "Expanding metro area, new customer acquisition,
+    infrastructure growth" into three fields. PDC's importer is stricter than
+    the emitter was: it read a 1-column header, hit a 3-field row, threw
+    CSVFieldNumDifferentException — and abandoned the REST OF THE ZIP. Deploy
+    reported COMPLETED; 13 dictionaries queued before the bad row had landed
+    and the 18 after it had not, with nothing on screen saying why
+    (field-caught 2026-08-21 on the Arizona estate).
+    """
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    for r in rows:
+        w.writerow(list(r))
+    return buf.getvalue()
+
+
 def _index_lines(art: dict) -> list:
-    lines = ["kind,name,file,term,term_id"]
+    rows = [("kind", "name", "file", "term", "term_id")]
     for p in art["patterns"]:
-        lines.append(f"pattern,{p['rule']['name']},patterns-import.zip/{p['filename']},{p['term']},{p.get('term_id') or ''}")
+        rows.append(("pattern", p["rule"]["name"],
+                     f"patterns-import.zip/{p['filename']}", p["term"],
+                     p.get("term_id") or ""))
     for d in art["dictionaries"]:
-        lines.append(f"dictionary,{d['rule']['name']},dictionaries-import.zip/{d['zipname']},{d['term']},{d.get('term_id') or ''}")
-    return lines
+        rows.append(("dictionary", d["rule"]["name"],
+                     f"dictionaries-import.zip/{d['zipname']}", d["term"],
+                     d.get("term_id") or ""))
+    # a term name carrying a comma would break this manifest the same way
+    return _csv(rows).rstrip("\n").split("\n")
 
 
 _README = (
