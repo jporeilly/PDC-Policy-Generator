@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.10.11] - 2026-08-21
+
+### Fixed - a Disable button that was disabled
+
+"Disable built-ins" and "Restore" sat `disabled` until "Count them" had been
+clicked, and nothing on screen said so. Field-caught mid-walk: "I've clicked
+Disable built-ins several times, seems as though it's disabled (joke)" - which
+was the correct diagnosis. The action needs the count for its own confirm
+prompt, so it now fetches its own when nobody has counted, and both buttons
+stand alone. Disable is the primary action on that card and now looks like it.
+
+### Added - the built-in disable is confirmed against the estate
+
+The endpoint reported `changed` - the number of PATCH calls that did not
+raise. That is not the number of methods that are off, and this action is the
+only thing standing between a custom-only programme and 137 built-in shapes
+competing with it during the next identification run. It now READS EVERY
+TARGET BACK and reports the count the estate agrees with; anything PDC
+accepted but did not apply is named, with its live state, and the card says an
+identification job will still classify against it. A dry run reports no
+verification, because it changed nothing.
+
+The test fake grew to match: it honours an enable/disable rather than always
+answering from a static table, it has a detail record for the built-in at all
+(anything READING one hit a KeyError before), and it can be told to accept a
+write and ignore it - which is the case the read-back exists for.
+
 ## [1.10.10] — 2026-08-21
 
 ### Changed — the Load overview explains the stages as tiles

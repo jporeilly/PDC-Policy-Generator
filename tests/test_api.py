@@ -381,6 +381,41 @@ class TestBuiltIns:
         assert fake_pdc["enabled"] == [{"kind": "DataPattern", "_id": "m3", "enabled": False}], \
             "the app must never disable a method it authored"
 
+    def test_disable_is_verified_against_the_estate(self, api_client, registry_file, fake_pdc):
+        """A PATCH returning 200 is not a method that is off. This action is
+        the only thing keeping 137 built-in shapes out of the next
+        identification run, so the number reported is the number the ESTATE
+        agrees with."""
+        client = self._client(api_client, registry_file)
+        self._connect(client)
+        body = client.post("/api/pdc/builtins",
+                           json={"enabled": False, "dry_run": False}).json()
+        assert body["changed"] == 1
+        assert body["verified"] == 1, "the estate was never asked whether it agreed"
+        assert body["unverified"] == 0 and body["unverified_rows"] == []
+
+    def test_a_write_that_silently_does_not_take_is_reported(self, api_client,
+                                                             registry_file, fake_pdc):
+        """The failure this exists to catch: PDC accepts the call, reports
+        success, and the method is still enabled. Counting calls that did not
+        raise would report a clean disable over a live built-in."""
+        fake_pdc["write_ignored"].add("m3")
+        client = self._client(api_client, registry_file)
+        self._connect(client)
+        body = client.post("/api/pdc/builtins",
+                           json={"enabled": False, "dry_run": False}).json()
+        assert body["changed"] == 1, "the call itself still 'succeeded'"
+        assert body["verified"] == 0
+        assert body["unverified"] == 1
+        assert body["unverified_rows"][0]["name"] == "Claims Builtin Clone"
+        assert body["unverified_rows"][0]["isEnabled"] is True
+
+    def test_a_dry_run_reports_no_verification(self, api_client, registry_file, fake_pdc):
+        client = self._client(api_client, registry_file)
+        self._connect(client)
+        body = client.post("/api/pdc/builtins", json={}).json()
+        assert "verified" not in body, "a dry run changed nothing - nothing to verify"
+
     def test_restore_is_the_same_call(self, api_client, registry_file, fake_pdc):
         client = self._client(api_client, registry_file)
         self._connect(client)

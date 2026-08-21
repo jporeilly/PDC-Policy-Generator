@@ -1058,6 +1058,29 @@ def api_pdc_builtins(body: BuiltInsRequest | None = None) -> dict:
     plan["rows"] = results
     plan["changed"] = sum(1 for r in results if r.get("ok"))
     plan["failed"] = failed
+
+    # READ BACK. A PATCH that returns 200 is not the same as a method that is
+    # off, and this action is the one thing standing between a custom-only
+    # programme and 137 built-in shapes competing with it during the next
+    # identification run. So the count that gets reported is the count the
+    # ESTATE agrees with, not the count of calls that did not raise.
+    verified, unverified = 0, []
+    for m in targets:
+        try:
+            d = _with_pdc(p, lambda tok, m=m: pdc_mod.get_method(
+                p["base"], tok, m["kind"], m["_id"], verify_tls=p["verify_tls"]))
+        except Exception as e:
+            unverified.append({"kind": m["kind"], "name": m["name"],
+                               "error": str(e)[:120]})
+            continue
+        if bool(d.get("isEnabled")) == bool(body.enabled):
+            verified += 1
+        else:
+            unverified.append({"kind": m["kind"], "name": m["name"],
+                               "isEnabled": bool(d.get("isEnabled"))})
+    plan["verified"] = verified
+    plan["unverified"] = len(unverified)
+    plan["unverified_rows"] = unverified[:20]
     return plan
 
 

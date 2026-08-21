@@ -79,7 +79,10 @@ def fake_pdc(monkeypatch):
         pass
 
     calls = {"removed": [], "uploads": [], "binds": [], "jobs": [], "waited": [],
-             "enabled": []}
+             "enabled": [],
+             # what the estate actually holds after a write, and the ids whose
+             # write SILENTLY does not take - the case a read-back exists for
+             "enabled_state": {}, "write_ignored": set()}
 
     def auth(base, user, pw, version="v3", verify_tls=False, realm="pdc"):
         if pw != "good":
@@ -110,6 +113,13 @@ def fake_pdc(monkeypatch):
                    "isEnabled": True, "builtIn": False,
                    "rowCount": 5,   # Registry seeds 3 values -> row-count drift
                    "rules": [{"actions": [{"applyTags": [{"name": "internal"}]}]}]},
+            # the built-in. It had no detail record at all, so anything that
+            # READ a built-in back (rather than just writing to it) hit a
+            # KeyError in the fake rather than an answer.
+            "m3": {"_id": "m3", "name": "Claims Builtin Clone", "type": "DataPattern",
+                   "isEnabled": True, "builtIn": True,
+                   "regexMatch": {"regex": ["^MBR-\d{6}$"]},
+                   "rules": [{"actions": [{"applyTags": [{"name": "pii"}]}]}]},
             "m4": {"_id": "m4", "name": "Claims Legacy Thing", "type": "DataPattern",
                    "isEnabled": True, "builtIn": False,
                    "regexMatch": {"regex": ["^X$"]},
@@ -140,7 +150,12 @@ def fake_pdc(monkeypatch):
         return {"status": "COMPLETED", "workerName": "X"}
 
     def get_method(base, token, kind, _id, verify_tls=False, timeout=30):
-        return copy.deepcopy(_details()[_id])
+        d = copy.deepcopy(_details()[_id])
+        # the fake honours an enable/disable that actually happened, so a
+        # read-back verification can be tested rather than assumed
+        if _id in calls["enabled_state"]:
+            d["isEnabled"] = calls["enabled_state"][_id]
+        return d
 
     def bind_business_term(base, token, kind, _id, term_name, term_id,
                            verify_tls=False, timeout=30):
@@ -201,6 +216,8 @@ def fake_pdc(monkeypatch):
 
     def set_method_enabled(base, token, kind, _id, enabled, verify_tls=False, timeout=30):
         calls["enabled"].append({"kind": kind, "_id": _id, "enabled": bool(enabled)})
+        if _id not in calls["write_ignored"]:
+            calls["enabled_state"][_id] = bool(enabled)
         return True
 
     def start_identification_job(base, token, scope, dictionary_ids, pattern_ids,

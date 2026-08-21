@@ -90,7 +90,28 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
   }
 
   async function builtinsSet(enabled) {
-    const n = builtins?.built_in ?? '?'
+    // Count first if nobody has. These buttons used to sit DISABLED until
+    // "Count them" had run, with nothing on screen saying so — a control that
+    // does nothing and reports nothing (field-caught: "I've clicked Disable
+    // built-ins several times, seems as though it's disabled (joke)"). The
+    // count is one call and the action needs the number for its own prompt,
+    // so it fetches its own.
+    let plan = builtins
+    if (!plan?.built_in) {
+      setBusy(true); setError(null)
+      try {
+        plan = await post('/api/pdc/builtins', { dry_run: true })
+        setBuiltins(plan)
+      } catch (err) {
+        setError(err.message); setBusy(false); return
+      }
+      setBusy(false)
+    }
+    if (!plan?.built_in) {
+      setError('PDC reports no built-in methods to change.')
+      return
+    }
+    const n = plan.built_in
     if (!window.confirm(
       `${enabled ? 'Enable' : 'Disable'} ${n} BUILT-IN method(s) in PDC?
 
@@ -220,13 +241,13 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
             <button className="ghost" onClick={builtinsPlan} disabled={busy || !pdc}>
               {busy ? 'Reading…' : '↻ Count them'}
             </button>
-            <button className="ghost" onClick={() => builtinsSet(false)}
-                    disabled={busy || !pdc || !builtins?.built_in}
+            <button className="primary" onClick={() => builtinsSet(false)}
+                    disabled={busy || !pdc}
                     title="Disable every built-in pattern and dictionary (reversible)">
               ⦸ Disable built-ins…
             </button>
             <button className="ghost" onClick={() => builtinsSet(true)}
-                    disabled={busy || !pdc || !builtins?.built_in}
+                    disabled={busy || !pdc}
                     title="Put every built-in back">
               ↺ Restore…
             </button>
@@ -253,7 +274,37 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
                     {builtins.changed} {builtins.enabled ? 'enabled' : 'disabled'}
                     {builtins.failed ? ` · ${builtins.failed} failed` : ''}
                   </span>}
+              {/* the count the ESTATE agrees with, read back after the write */}
+              {!builtins.dry_run && builtins.verified != null && (
+                <span className={`badge ${builtins.unverified ? 'warning' : 'good'}`}>
+                  {builtins.unverified
+                    ? `${builtins.unverified} NOT ${builtins.enabled ? 'enabled' : 'disabled'} in PDC`
+                    : `confirmed ${builtins.enabled ? 'enabled' : 'disabled'} in PDC — read back`}
+                </span>
+              )}
             </div>
+            {!builtins.dry_run && builtins.unverified > 0 && (
+              <>
+                <p className="hint-line">
+                  PDC accepted the call and these are still{' '}
+                  <b>{builtins.enabled ? 'disabled' : 'enabled'}</b>. An identification job
+                  will classify against them — re-run, or turn them off in PDC directly.
+                </p>
+                <div className="table-scroll" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                  <table>
+                    <thead><tr><th>Method</th><th>State in PDC</th></tr></thead>
+                    <tbody>
+                      {builtins.unverified_rows.map((r) => (
+                        <tr key={`${r.kind}-${r.name}`}>
+                          <td>{r.name}</td>
+                          <td className="notes">{r.error || (r.isEnabled ? 'enabled' : 'disabled')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
             {!builtins.dry_run && builtins.failed > 0 && (
               <div className="table-scroll" style={{ maxHeight: '220px', overflowY: 'auto' }}>
                 <table>
