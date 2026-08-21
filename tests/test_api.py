@@ -280,6 +280,28 @@ class TestDeployFlow:
         assert by_name["Claims Member Number"]["bound"] is True
         assert by_name["Claims State Code"]["bound"] is None    # no term id yet
 
+    def test_a_partial_import_names_where_it_stopped(self, api_client, registry_file, fake_pdc):
+        """PDC works through the zip and abandons the rest at the first member
+        it cannot read - reporting COMPLETED, with an error that never names
+        the file. The app knows the authoring order and what came back, so the
+        first method of that kind still absent IS where it stopped.
+
+        Field-caught 2026-08-21: a dictionary value carrying commas took 18 of
+        31 dictionaries with it, and the deploy table showed only a wall of
+        "not found" with no cause.
+        """
+        fake_pdc["hide_from_live"].add("Claims State Code")     # never imported
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/deploy", json={"allow_name_binding": True}).json()
+
+        assert body["counts"]["imported"] == 1 and body["counts"]["failed"] == 1
+        w = next(w for w in body["workers"] if w["kind"] == "Dictionary")
+        assert w["stopped_at"] == "Claims State Code",             "a partial import must name the method it stopped at"
+        assert w["lost_after"] == 0
+        # the pattern zip was fine and must not be blamed
+        p = next(w for w in body["workers"] if w["kind"] == "DataPattern")
+        assert "stopped_at" not in p
+
     def test_deploy_refuses_a_degenerate_prefix(self, api_client, registry_file, fake_pdc):
         client = self._ready(api_client, registry_file)
         res = client.post("/api/pdc/deploy", json={"prefix": "x"})

@@ -82,7 +82,10 @@ def fake_pdc(monkeypatch):
              "enabled": [],
              # what the estate actually holds after a write, and the ids whose
              # write SILENTLY does not take - the case a read-back exists for
-             "enabled_state": {}, "write_ignored": set()}
+             "enabled_state": {}, "write_ignored": set(),
+             # methods PDC never imported - the post-import verify must not
+             # see them, which is how a partial import is modelled
+             "hide_from_live": set()}
 
     def auth(base, user, pw, version="v3", verify_tls=False, realm="pdc"):
         if pw != "good":
@@ -133,6 +136,7 @@ def fake_pdc(monkeypatch):
             {"_id": "m3", "name": "Claims Builtin Clone", "kind": "DataPattern", "builtIn": True, "isEnabled": True},
             {"_id": "m4", "name": "Claims Legacy Thing", "kind": "DataPattern", "builtIn": False, "isEnabled": True},
         ]
+        rows = [r for r in rows if r["name"] not in calls["hide_from_live"]]
         return [r for r in rows if not prefix or r["name"].startswith(prefix)]
 
     def remove_method(base, token, kind, _id, verify_tls=False):

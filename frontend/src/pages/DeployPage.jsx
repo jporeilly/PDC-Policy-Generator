@@ -214,6 +214,24 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
             {result.counts.failed > 0 && <span className="badge serious">✋ failed {result.counts.failed}</span>}
           </p>
         )}
+        {/* WHICH one broke it. PDC's importer abandons the rest of the zip at
+            the first member it cannot read, reports COMPLETED anyway, and its
+            error never names the file — so the deploy table showed a wall of
+            "not found" with no cause. The first absent method of that kind IS
+            where it stopped. */}
+        {result?.workers?.filter((w) => w.stopped_at).map((w) => (
+          <div className="error" key={`stop-${w.kind}`}>
+            <b>{w.kind} import stopped at “{w.stopped_at}”.</b>{' '}
+            {w.lost_after > 0 && (
+              <>The {w.lost_after} method(s) queued after it in the zip were never
+              read — PDC abandons the rest of the archive at the first member it
+              cannot parse, and still reports {w.status}. </>
+            )}
+            {w.exception
+              ? <>PDC said: <code>{w.exception}</code></>
+              : <>PDC reported no error, so check that method’s values and rule.</>}
+          </div>
+        ))}
         {plan && (
           <>
             <p className="summary">

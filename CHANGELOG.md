@@ -2,6 +2,19 @@
 
 ## [1.10.11] - 2026-08-21
 
+### Added - a partial import names the method it stopped at
+
+The other half of the same failure. PDC works through the zip, abandons the
+rest at the first member it cannot read, reports COMPLETED, and its error
+names the exception but never the file - so the deploy table showed 18 rows of
+"not found after import" with no cause anywhere on screen.
+
+The app has both halves: the authoring order and what came back. The first
+method of a kind still absent IS where the import stopped, and the count after
+it is what never got a chance. Deploy now says so - "Dictionary import stopped
+at 'Arizona Water System Conservation Focus'; the 17 method(s) queued after it
+were never read" - with PDC's own exception quoted underneath.
+
 ### Fixed - a dictionary value with a comma in it killed the import
 
 Deploy reported COMPLETED and 18 of 31 dictionaries were not in the catalog.

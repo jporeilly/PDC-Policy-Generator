@@ -673,6 +673,25 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
     counts = {"imported": sum(1 for r in rows if r["imported"]),
               "failed": sum(1 for r in rows if not r["imported"]),
               "bound": sum(1 for r in rows if r["bound"])}
+
+    # NAME THE ONE THAT BROKE IT. PDC's importer works through the zip and
+    # abandons the rest at the first member it cannot read — its error says
+    # what went wrong ("fields num is 3") but never which file, and the worker
+    # still reports COMPLETED. The app knows both halves: the authoring order
+    # and which methods came back. The first method of that kind still absent
+    # is where the import stopped, and everything after it never got a chance.
+    # (Field-caught 2026-08-21: a dictionary value carrying commas took 18 of
+    # 31 dictionaries with it, and the deploy table showed only "not found".)
+    for w in workers:
+        kind = w["kind"]
+        absent = [r["name"] for r in rows if r["kind"] == kind and not r["imported"]]
+        if not absent:
+            continue
+        w["stopped_at"] = absent[0]
+        w["lost_after"] = len(absent) - 1
+        exc = ((w.get("report") or {}).get("ERROR") or {}).get("event", {}).get("exception")
+        if exc:
+            w["exception"] = str(exc).split("\n")[0][:300]
     return {"prefix": prefix, "dry_run": False, "workers": workers,
             "rows": rows, "counts": counts}
 
