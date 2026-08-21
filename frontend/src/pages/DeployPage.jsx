@@ -298,7 +298,7 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
         <header>
           <h2>Run identification <span>optional</span></h2>
           <div className="actions" style={{ marginTop: 0 }}>
-            <button className="ghost" onClick={identify} disabled={busy || !pdc || !result}>
+            <button className="primary" onClick={identify} disabled={busy || !pdc || !result}>
               ▶ Start DATA_IDENTIFICATION job
             </button>
           </div>
