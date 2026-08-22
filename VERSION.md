@@ -1,6 +1,6 @@
 # Version
 
-**1.10.11** — 2026-08-21
+**1.10.12** — 2026-08-21
 
 The Load overview now explains the five stages as tiles — numbered dot, title,
 explanation and a Go-to button per stage, the Glossary Generator's Home

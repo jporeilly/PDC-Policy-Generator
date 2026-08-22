@@ -1,6 +1,10 @@
 # Changelog
 
-## [1.10.11] - 2026-08-21
+## [1.10.12] - 2026-08-22
+
+Two changes that landed in the repo minutes after the 1.10.11 installer was
+built, and were briefly misfiled under it - the shipped 1.10.11 does NOT
+carry them; this release does.
 
 ### Added - a partial import names the method it stopped at
 
@@ -14,6 +18,14 @@ method of a kind still absent IS where the import stopped, and the count after
 it is what never got a chance. Deploy now says so - "Dictionary import stopped
 at 'Arizona Water System Conservation Focus'; the 17 method(s) queued after it
 were never read" - with PDC's own exception quoted underneath.
+
+### Changed - the buttons that do the thing look like it
+
+Start DATA_IDENTIFICATION on Deploy and Disable built-ins on Reconcile are
+the primary actions on their cards, and are now styled as primary instead of
+ghost buttons (field request, twice in one afternoon).
+
+## [1.10.11] - 2026-08-21
 
 ### Fixed - a dictionary value with a comma in it killed the import
 
