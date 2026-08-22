@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.10.13] - 2026-08-22
+
+### Fixed - the lab's IP address shipped as the Connect card's placeholder
+
+The Base URL field suggested `https://192.168.1.200` - the demo estate's real
+address, read by the user off a screenshot of their own app. Placeholders
+teach the field's SHAPE; a real host teaches the audience where the lab
+lives. Now `https://[PDC-SERVER URL]`, the fields are labelled PDC Base URL /
+PDC Username / PDC Password, and the username shows a `catalog.admin`-shaped
+example. An API error message carrying the same IP as its example is generic
+too.
+
+The sibling Glossary app's release train FAILED on exactly this class of leak
+(a real host in a placeholder); Policy never carried that guard. It does now:
+tests/test_no_real_hosts.py checks both the shipped sources and the BUILT
+bundle for lab hosts and credentials - and its first run caught the API
+error message and a code comment beyond the placeholder the user spotted.
+
 ## [1.10.12] - 2026-08-22
 
 Two changes that landed in the repo minutes after the 1.10.11 installer was

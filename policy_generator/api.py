@@ -396,7 +396,7 @@ def api_pdc_connect(body: PdcConnectRequest) -> dict:
     short-lived Keycloak token expires (see _with_pdc)."""
     base = body.base_url.strip()
     if not base:
-        raise HTTPException(status_code=400, detail="PDC base URL is required (e.g. https://192.168.1.200)")
+        raise HTTPException(status_code=400, detail="PDC base URL is required (e.g. https://pdc.example.com)")
     token = (body.token or "").strip()
     try:
         if not token:

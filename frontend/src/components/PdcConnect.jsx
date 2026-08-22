@@ -46,16 +46,20 @@ export default function PdcConnect({ pdc, onPdc, hint }) {
       <p className="hint-line">
         {hint ?? 'The token lives in memory for this session only; the password is never stored.'}
       </p>
+      {/* Generic placeholders only — a real estate host compiled into the UI
+          is exactly the leak the sibling app's bundle guard exists for, and
+          its release train once failed on a real host in a placeholder.
+          tests/test_no_real_hosts.py enforces the same rule here. */}
       <div className="form-grid">
-        <label>Base URL
-          <input placeholder="https://192.168.1.200" value={form.base_url}
+        <label>PDC Base URL
+          <input placeholder="https://[PDC-SERVER URL]" value={form.base_url}
                  onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
         </label>
-        <label>Username
-          <input value={form.username}
+        <label>PDC Username
+          <input placeholder="catalog.admin" value={form.username}
                  onChange={(e) => setForm({ ...form, username: e.target.value })} />
         </label>
-        <label>Password
+        <label>PDC Password
           <input type="password" value={form.password}
                  onChange={(e) => setForm({ ...form, password: e.target.value })} />
         </label>
