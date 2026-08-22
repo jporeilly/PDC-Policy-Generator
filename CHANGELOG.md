@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.10.14] - 2026-08-22
+
+### Changed - the username hint names the KIND of login, never an account
+
+1.10.13's placeholder suggested `catalog.admin` - added unasked, and a lab
+account convention rather than a field shape. These apps are generic: a hint
+distinguishes WHICH connection a field belongs to (a PDC catalog login vs the
+Keycloak console admin), never a name. The placeholder now reads "PDC catalog
+user", and the guard bans `catalog.admin` so it cannot return.
+
 ## [1.10.13] - 2026-08-22
 
 ### Fixed - the lab's IP address shipped as the Connect card's placeholder

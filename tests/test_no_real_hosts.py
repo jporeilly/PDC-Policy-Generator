@@ -24,6 +24,10 @@ BANNED = [
     r"\bcatalog123\b",
     r"minio_secret",
     r"\bazwater\b",
+    # an account-name example is estate flavour, not field shape - hints name
+    # the KIND of login (PDC catalog user vs Keycloak console admin), never a
+    # specific account (user, 2026-08-22)
+    r"\bcatalog\.admin\b",
 ]
 
 

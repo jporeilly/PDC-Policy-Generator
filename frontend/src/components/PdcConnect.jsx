@@ -56,7 +56,7 @@ export default function PdcConnect({ pdc, onPdc, hint }) {
                  onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
         </label>
         <label>PDC Username
-          <input placeholder="catalog.admin" value={form.username}
+          <input placeholder="PDC catalog user" value={form.username}
                  onChange={(e) => setForm({ ...form, username: e.target.value })} />
         </label>
         <label>PDC Password
