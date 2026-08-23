@@ -330,6 +330,10 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
         return {"name": r["name"], "term": d["term"], "term_id": d.get("term_id") or None,
                 "kind": "dictionary", "evidence": d.get("evidence") or "profiled",
                 "values": values[:200], "values_count": len(values),
+                # which sibling vocabularies collide with this one — the reason
+                # its blend was tightened to require the column name (empty =
+                # loose blend, values alone are proof)
+                "shared_vocabulary_with": d.get("shared_vocabulary_with") or [],
                 "column_hint": _hint(r), "tags": _tags(r), "rule": r}
 
     # A steward-declared intent beats the name heuristics: mapping_only

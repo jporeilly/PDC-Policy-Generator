@@ -310,6 +310,7 @@ export default function AuthorPage({ summary }) {
               <table>
                 <thead>
                   <tr><th>Method</th><th>Term</th><th>Bound</th><th>Evidence</th>
+                      <th>Blend</th>
                       <th className="num">Values</th>
                       <th>Sample</th><th>Column hint</th><th>Tags</th></tr>
                 </thead>
@@ -322,6 +323,12 @@ export default function AuthorPage({ summary }) {
                         ? <span className="badge good" title={d.term_id}>✓ by id</span>
                         : <span className="badge warning" title="Reconcile to bind by id">⚠ by name</span>}</td>
                       <td><EvidenceBadge kind={d.evidence} /></td>
+                      <td>{(d.shared_vocabulary_with?.length ?? 0) > 0
+                        ? <span className="badge accent"
+                                title={`Shares values with ${d.shared_vocabulary_with.join(', ')} — values alone can no longer fire this rule, the column name must also agree (similarity 0.5 + name 0.5 vs the 0.7 gate)`}>
+                            ⚭ name required
+                          </span>
+                        : <span className="notes" title="No sibling dictionary shares this vocabulary — its values alone are proof">values suffice</span>}</td>
                       <td className="num">{d.values_count}</td>
                       <td className="notes cell-clip" title={d.values.slice(0, 12).join(', ')}>
                         {d.values.slice(0, 5).join(', ')}{d.values_count > 5 ? '…' : ''}
