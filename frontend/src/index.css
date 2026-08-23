@@ -135,10 +135,18 @@ button.version-pill:hover { background: var(--gridline); }
   background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 1rem 1.25rem; margin: 0 0 2rem;
 }
-.stepper li { display: flex; align-items: center; flex: 1; min-width: 0; }
+/* Each step sizes from its CONTENT and the connector bar absorbs the slack.
+   flex: 1 (equal li widths) squeezed every slot to row/5 while the labelled
+   buttons need more — they overflowed and the bar collapsed to its 18px
+   min-width, rendering as a floating dash instead of a connector
+   (field-caught 2026-08-23, twice). The last step has no bar, so it takes
+   only its natural width. */
+.stepper li { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+.stepper li:last-child { flex: 0 0 auto; }
 .stepper button {
   display: flex; align-items: center; gap: .75rem; background: none; border: none;
   cursor: pointer; padding: .55rem .7rem; border-radius: 8px; text-align: left;
+  flex: none;
 }
 .stepper button:disabled { cursor: not-allowed; opacity: .45; }
 .stepper button:not(:disabled):hover { background: var(--surface-2); }
@@ -153,7 +161,7 @@ button.version-pill:hover { background: var(--gridline); }
 .step-label { font-size: .95rem; font-weight: 650; color: var(--text-primary); }
 .stepper li.locked .step-label { color: var(--text-muted); }
 .step-hint { font-size: .74rem; color: var(--text-muted); white-space: nowrap; }
-.stepper .bar { flex: 1; height: 2px; background: var(--gridline); margin: 0 .9rem; min-width: 18px; border-radius: 1px; }
+.stepper .bar { flex: 1; height: 2px; background: var(--gridline); margin: 0 .55rem; min-width: 18px; border-radius: 1px; }
 .stepper li.done .bar { background: var(--status-good); }
 
 /* ---------- cards / layout ---------- */
