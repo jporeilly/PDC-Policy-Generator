@@ -296,7 +296,12 @@ Registry, the authored set${dc ? ' and the live catalog' : ''} at compile time.<
               <span className={`badge ${ident.counts.expected_missing ? 'warning' : 'neutral'}`}>
                 {ident.counts.expected_missing} expected, nothing there
               </span>
-              <span className={`badge ${ident.counts.unexpected ? 'accent' : 'neutral'}`}>
+              <span className="badge good"
+                    title="No method claims these columns and the bound term is exactly the one the Registry maps there — the Glossary's Apply link governing by design (names, addresses, dates, free text)">
+                {ident.counts.link_governed ?? 0} link-governed (by design)
+              </span>
+              <span className={`badge ${ident.counts.unexpected ? 'accent' : 'neutral'}`}
+                    title="A term is bound that the Registry neither identifies NOR maps on this column — worth a look">
                 {ident.counts.unexpected} unexpected
               </span>
               <span className="badge neutral">{ident.counts.untouched} untouched</span>
@@ -310,10 +315,12 @@ Registry, the authored set${dc ? ' and the live catalog' : ''} at compile time.<
                       <td className="notes">{r.table}</td>
                       <td>{r.column}</td>
                       <td>
-                        <span className={`badge ${r.verdict === 'expected_tagged' ? 'good'
+                        <span className={`badge ${['expected_tagged', 'link_governed'].includes(r.verdict) ? 'good'
                           : r.verdict === 'unexpected' ? 'accent' : 'warning'}`}
                               title={r.verdict === 'expected_term_only'
                                 ? 'The term is bound but none of the method’s tags are on the column — that is a term link from the Glossary’s Apply, not a rule that matched'
+                                : r.verdict === 'link_governed'
+                                ? 'The Registry maps this exact term here and no method claims the column — the Apply link governing by design'
                                 : undefined}>
                           {r.verdict.replaceAll('_', ' ')}
                         </span>

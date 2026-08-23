@@ -994,7 +994,17 @@ def api_pdc_identified(body: IdentifiedRequest) -> dict:
                 nm = (t or {}).get("name")
                 if nm:
                     tags_by_term.setdefault(m["term"], set()).add(str(nm).lower())
+    # every column the Registry MAPS (any concept, method or not) — a term
+    # bound there by the Glossary's Apply is the LINK working as designed,
+    # not an identification surprise. Without this split, all 57 mapping-only
+    # columns on the Arizona walk read back as "unexpected" and the count was
+    # mistaken for dictionary cross-fire (2026-08-23).
+    mapped = {}
     for c in (_state["reg"].get("concepts") or []):
+        for src in (c.get("sources") or []):
+            col = str(src).split(".")[-1].strip().lower()
+            if col:
+                mapped.setdefault(col, set()).add(c.get("term_name"))
         if c.get("term_name") not in authored:
             continue
         for src in (c.get("sources") or []):
@@ -1033,6 +1043,12 @@ def api_pdc_identified(body: IdentifiedRequest) -> dict:
                 verdict = "expected_term_only"
             elif want:
                 verdict = "expected_missing"
+            elif got and (got & mapped.get(key, set())):
+                # no method claims this column, and the bound term is exactly
+                # the one the Registry maps here — the Glossary's Apply link
+                # doing its job. Mapping-only concepts (names, addresses,
+                # dates, free text) govern THIS way by design.
+                verdict = "link_governed"
             elif got:
                 verdict = "unexpected"
             else:
@@ -1043,7 +1059,7 @@ def api_pdc_identified(body: IdentifiedRequest) -> dict:
 
     counts = {k: sum(1 for r in rows if r["verdict"] == k)
               for k in ("expected_tagged", "expected_term_only", "expected_missing",
-                        "unexpected", "untouched")}
+                        "link_governed", "unexpected", "untouched")}
     return {"prefix": art["prefix"], "tables": tables, "counts": counts, "rows": rows}
 
 

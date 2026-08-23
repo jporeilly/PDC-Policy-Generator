@@ -476,6 +476,35 @@ class TestIdentifiedReadBack:
         assert v["filler"] == "untouched"
         assert body["counts"]["expected_missing"] == 1
         assert "expected_term_only" in body["counts"],             "a term with none of the method's tags is an Apply link, not a match"
+        assert "link_governed" in body["counts"]
+
+    def test_mapped_link_reads_as_link_governed_not_unexpected(
+            self, api_client, tmp_path, fake_pdc):
+        """Field 2026-08-23: all 57 mapping-only columns on the Arizona walk
+           read back as 'unexpected' and the count was mistaken for dictionary
+           cross-fire. A bound term the Registry MAPS to that column (and no
+           method claims) is the Apply link governing by design; only a term
+           the Registry neither identifies nor maps there stays unexpected."""
+        import json as _json
+        from tests.conftest import make_registry, loaded_client
+        reg = make_registry()
+        # a mapping-only concept whose source IS the fixture's 'notes' column
+        reg["concepts"].append(
+            {"term_name": "Something Else", "term_id": "t-900", "tags": ["pii"],
+             "category": "Notes", "sources": ["claims.members.notes"],
+             "detect": [], "detection_intent": "mapping_only"})
+        path = tmp_path / "registry.claims.json"
+        path.write_text(_json.dumps(reg), encoding="utf-8")
+        client = loaded_client(api_client, path)
+        res = client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        assert res.status_code == 200, res.text
+        body = client.post("/api/pdc/identified",
+                           json={"tables": ["customers"], "prefix": "Claims"}).json()
+        v = {r["column"]: r["verdict"] for r in body["rows"]}
+        assert v["notes"] == "link_governed", v
+        assert body["counts"]["link_governed"] == 1
+        assert body["counts"]["unexpected"] == 0
 
     def test_reports_the_terms_on_both_sides(self, api_client, registry_file, fake_pdc):
         client = self._ready(api_client, registry_file)
