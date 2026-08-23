@@ -129,9 +129,30 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
       setError('retire is always scoped — enter the name prefix first')
       return
     }
-    const count = methods?.methods?.filter((m) => !m.builtIn).length ?? '?'
+    // List first if nobody has. This button used to sit DISABLED until "List
+    // methods" had run, with nothing on screen saying so — the same silent
+    // dead-control defect as Disable built-ins one card up, missed when that
+    // one was fixed (field-caught twice: "I click on Retire set and nothing
+    // happens"). The action needs the list for its own confirm prompt anyway,
+    // so it fetches its own.
+    let listed = methods
+    if (!listed?.count) {
+      setBusy(true); setError(null)
+      try {
+        listed = await post('/api/pdc/methods', { prefix: prefix || null })
+        setMethods(listed)
+      } catch (err) {
+        setError(err.message); setBusy(false); return
+      }
+      setBusy(false)
+    }
+    const scoped = listed?.methods?.filter((m) => !m.builtIn) ?? []
+    if (!scoped.length) {
+      setError(`no custom methods named "${prefix}…" in PDC — nothing to retire`)
+      return
+    }
     if (!window.confirm(
-      `Retire (DELETE) ${count} method(s) named "${prefix}…" from PDC?\n` +
+      `Retire (DELETE) ${scoped.length} method(s) named "${prefix}…" from PDC?\n` +
       'Built-ins are never touched. This cannot be undone.')) return
     setBusy(true)
     setError(null)
@@ -328,7 +349,7 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
             <input className="text" placeholder="Name prefix (the authored set)"
                    value={prefix} onChange={(e) => setPrefix(e.target.value)} />
             <button className="ghost" onClick={listMethods} disabled={busy || !pdc}>List methods</button>
-            <button className="ghost" onClick={retire} disabled={busy || !pdc || !methods?.count}
+            <button className="ghost" onClick={retire} disabled={busy || !pdc}
                     title="Delete the prefixed set from PDC (built-ins never touched)">
               🗑 Retire set…
             </button>
