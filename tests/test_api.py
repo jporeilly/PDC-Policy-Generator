@@ -739,9 +739,10 @@ class TestRegistryScope:
         body = client.post("/api/pdc/scope-candidates").json()
         rows = {r["label"]: r for r in body["rows"]}
         assert rows["customers"]["id"] == "e-2"   # resolved via the live lookup
-        assert rows["members"]["id"] is None      # not registered in PDC yet
-        assert "members" in body["unresolved"]
-        assert body["resolved"] >= 1
+        assert rows["members"]["id"] == "e-3"
+        assert rows["pipes.csv"]["id"] is None    # not registered in PDC yet
+        assert "pipes.csv" in body["unresolved"]
+        assert body["resolved"] >= 2
 
 
 class TestReconcileColumnEcho:
@@ -787,3 +788,35 @@ class TestReconcileColumnEcho:
         assert row["pdc_id"] == "t-777" and row["glossary_id"] == "g-1"
         # a name-missing concept WITHOUT an echo stays honestly missing
         assert any(r["status"] == "missing" for r in body["rows"])
+
+
+class TestEfficacy:
+    """Spec backlog 5, the third instrument: re-profiling reads the DATA,
+       drift reads the DEPLOYMENT, efficacy joins them. A method whose data
+       moved underneath it reports drift-clean and fires never - this is the
+       only view that says so."""
+
+    def _ready(self, api_client, registry_file):
+        from tests.conftest import loaded_client
+        client = loaded_client(api_client, registry_file)
+        res = client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc", "username": "steward", "password": "good"})
+        assert res.status_code == 200, res.text
+        return client
+
+    def test_live_dead_and_no_samples(self, api_client, registry_file, fake_pdc):
+        client = self._ready(api_client, registry_file)
+        body = client.post("/api/pdc/efficacy", json={"prefix": "Claims"}).json()
+        v = {r["term"]: r for r in body["rows"]}
+        # the pattern still matches its column's stored samples
+        mn = v["Member Number"]
+        assert mn["verdict"] == "live" and mn["matched"] == 2 and mn["samples"] == 2
+        # the dictionary's data moved underneath it: samples exist, zero match -
+        # drift would call this method clean forever
+        sc = v["State Code"]
+        assert sc["verdict"] == "dead", sc
+        assert "moved underneath" in sc["detail"]
+        assert body["counts"]["dead"] == 1 and body["counts"]["live"] == 1
+
+    def test_needs_registry_and_session(self, api_client):
+        assert api_client.post("/api/pdc/efficacy", json={}).status_code == 400

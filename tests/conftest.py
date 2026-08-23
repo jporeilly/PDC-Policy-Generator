@@ -173,9 +173,19 @@ def fake_pdc(monkeypatch):
         rows = [{"_id": "e-1", "attributes": {"name": "Claims Member Number", "type": "COLUMN",
                                               "qualifiedName": "public.customers.mbr_no"}},
                 {"_id": "e-2", "attributes": {"name": "customers", "type": "TABLE",
-                                              "qualifiedName": "public.customers"}}]
+                                              "qualifiedName": "public.customers"}},
+                {"_id": "e-3", "attributes": {"name": "members", "type": "TABLE",
+                                              "qualifiedName": "claims.members"}}]
         return [r for r in rows
                 if not names or str(r["attributes"]["name"]).lower() in names]
+
+    def profiling_for_parent(base, token, parent_id, version="v3", verify_tls=False,
+                             timeout=30, sample_limit=25):
+        # the members table's STORED profile: mbr_no still matches its seed,
+        # state's data moved underneath its dictionary, notes retained nothing
+        return {"mbr_no": {"samples": ["MBR-000001", "MBR-000002"], "patterns": []},
+                "state": {"samples": ["ZZ", "QQ"], "patterns": []},
+                "notes": {"samples": [], "patterns": []}}
 
     def profiled_at(base, token, entity_id, version="v3", verify_tls=False, timeout=20):
         # profiled by default; the freshness tests monkeypatch this to None
@@ -241,6 +251,7 @@ def fake_pdc(monkeypatch):
                      ("job_status", job_status), ("recent_workers", recent_workers),
                      ("profiled_at", profiled_at),
                      ("filter_entities", filter_entities),
+                     ("profiling_for_parent", profiling_for_parent),
                      ("start_identification_job", start_identification_job)]:
         monkeypatch.setattr(api_mod.pdc_mod, name, fn)
     return calls

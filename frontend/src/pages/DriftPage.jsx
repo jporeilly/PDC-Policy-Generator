@@ -112,8 +112,101 @@ export default function DriftPage({ summary, pdc, onPdc }) {
       )}
     </section>
 
+    <EfficacyCard pdc={pdc} onPdc={onPdc} prefix={prefix} />
+
     <VerdictsExplainer />
     </>
+  )
+}
+
+/* Efficacy — the third instrument (spec backlog 5). Re-profiling reads the
+   DATA; drift reads the DEPLOYMENT; this joins them: does each method still
+   match anything in the stored profile identification actually scores
+   against? A method whose data moved underneath it reports drift-CLEAN and
+   fires never — this is the only view that says so. */
+const EFF = {
+  live: { cls: 'good', icon: '✓', label: 'live' },
+  dead: { cls: 'serious', icon: '✋', label: 'dead' },
+  no_samples: { cls: 'warning', icon: '⚠', label: 'no samples' },
+  unresolved: { cls: 'accent', icon: 'ℹ', label: 'unresolved' },
+}
+
+function EfficacyCard({ pdc, onPdc, prefix }) {
+  const [out, setOut] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function run() {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/pdc/efficacy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix: prefix || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || res.statusText)
+      setOut(data)
+    } catch (err) {
+      setError(err.message)
+      if (err.message.includes('expired')) onPdc(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card">
+      <header>
+        <h2>Do the rules still match the data? <span>efficacy — seeds vs the stored profile</span></h2>
+        <div className="actions" style={{ marginTop: 0 }}>
+          <button className="primary" onClick={run} disabled={busy || !pdc}>
+            {busy ? 'Joining…' : '⚗ Run efficacy check'}
+          </button>
+        </div>
+      </header>
+      <p className="hint-line">
+        Drift proves a method still matches the <b>contract</b>; this proves it still matches
+        the <b>data</b> — each authored seed evaluated against the stored profile samples
+        identification actually scores with. A method whose data moved underneath it is
+        drift-clean and fires never; it shows here as <b>dead</b>, with the values that
+        replaced its shape. <b>No samples</b> means the profile retained nothing —
+        re-profile before trusting any score on that column.
+      </p>
+      {error && <p className="summary warn">{error}</p>}
+      {out && (
+        <>
+          <div className="chips-row">
+            {Object.entries(EFF).map(([k, v]) => (
+              <span key={k} className={`badge ${out.counts[k] ? v.cls : 'neutral'}`}>
+                {v.icon} {v.label} {out.counts[k]}
+              </span>
+            ))}
+          </div>
+          <div className="table-scroll" style={{ maxHeight: '380px', overflowY: 'auto' }}>
+            <table>
+              <thead><tr><th>Method</th><th>Kind</th><th>Source</th><th>Match</th><th>Verdict</th><th>Notes</th></tr></thead>
+              <tbody>
+                {out.rows.map((r) => {
+                  const v = EFF[r.verdict]
+                  return (
+                    <tr key={r.method}>
+                      <td>{r.method}</td>
+                      <td className="notes">{r.kind}</td>
+                      <td className="notes">{r.source ?? '—'}</td>
+                      <td className="num">{r.samples != null ? `${r.matched}/${r.samples}` : '—'}</td>
+                      <td><span className={`badge ${v.cls}`}>{v.icon} {v.label}</span></td>
+                      <td className="notes">{r.detail ?? '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 

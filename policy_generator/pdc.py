@@ -457,6 +457,38 @@ def get_method(base_url, token, kind, _id, verify_tls=True, timeout=30):
     return data.get(spec["by_id"]) or {}
 
 
+def profiling_for_parent(base_url, token, parent_id, version="v3", verify_tls=True,
+                         timeout=30, sample_limit=25):
+    """The STORED profile for every column under one table/file —
+    POST /entities/filter/profiling-info scoped by parentIds (the same route
+    the Glossary's harvest reads; identification computes its scores against
+    exactly this data). Returns {column_name_lower: {samples: [str], patterns:
+    [...]}} — empty samples means PDC retained none, and no pattern can score
+    there (the buildSamples lesson, 2026-08-22)."""
+    url = (clean_base(base_url)
+           + f"/api/public/{version}/entities/filter/profiling-info"
+           + f"?sampleLimit={sample_limit}&size=500")
+    out = _req("POST", url, token=token,
+               body={"filters": {"parentIds": [parent_id]}},
+               verify_tls=verify_tls, timeout=timeout)
+    res = {}
+    for it in _results(out):
+        name = str(it.get("name") or (it.get("attributes") or {}).get("name") or "").strip()
+        if not name:
+            continue
+        pinfo = it.get("profilingInfo") or it.get("profiling") or {}
+        sampling = pinfo.get("sampling") or pinfo.get("samples") or {}
+        raw = sampling.get("sample") if isinstance(sampling, dict) else sampling
+        samples = []
+        for s in raw or []:
+            v = s.get("value") if isinstance(s, dict) else s
+            if v is not None and str(v).strip():
+                samples.append(str(v))
+        res[name.lower()] = {"samples": samples,
+                             "patterns": pinfo.get("patternAnalysis") or pinfo.get("patterns") or []}
+    return res
+
+
 def confirm_term_by_column_echo(base_url, token, term_name, term_id, sources,
                                 version="v3", verify_tls=True, timeout=20):
     """Prove a term is alive by its id when every NAME lookup misses.

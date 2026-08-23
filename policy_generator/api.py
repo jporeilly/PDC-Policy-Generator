@@ -958,6 +958,128 @@ def api_pdc_entity(body: EntityDetailRequest) -> dict:
     return out
 
 
+@app.post("/api/pdc/efficacy")
+def api_pdc_efficacy(body: PrefixRequest | None = None) -> dict:
+    """Does each deployed method still match any DATA? (spec backlog 5)
+
+    Re-profiling reads the data; Drift reads the deployment; neither joins
+    them — so a method whose data moved underneath it reports CLEAN and
+    matches zero rows forever. This is the join, and it is exactly the check
+    that would have caught the numeric threshold, the stale profiles, the
+    0.09-capped patterns and the System Name mismatch without anyone having
+    to notice. Deterministic: the seeds are in the Registry, the stored
+    profile is in PDC (the same samples identification scores against),
+    and a regex either matches them or it does not.
+
+    Per method, against its term's own REGISTRY source columns:
+      live         the seed matches stored samples (rate reported)
+      dead         samples exist and the seed matches NONE of them
+      no_samples   the column's stored profile retained no values —
+                   nothing can score there until it is re-profiled
+      unresolved   the source table/file or column is not in PDC
+    """
+    _require_registry()
+    p = _require_pdc()
+    art = _author_or_400((body.prefix if body else None) or None)
+
+    # every authored method's seed + its term's physical sources
+    concepts = {c.get("term_name"): c for c in _state["reg"].get("concepts", [])
+                if isinstance(c, dict)}
+
+    def _srcs(term):
+        out = []
+        for s in (concepts.get(term) or {}).get("sources") or []:
+            parts = [x.strip() for x in str(s).split(".")]
+            if len(parts) == 3:
+                out.append((parts[1], parts[2]))
+            elif len(parts) == 4 and parts[2].lower() == "csv":
+                out.append((f"{parts[1]}.csv", parts[3]))
+        return out
+
+    methods = ([{"kind": "pattern", "term": m["term"], "name": m["rule"]["name"],
+                 "regex": (m["rule"].get("regexMatch") or {}).get("regex", [None])[0]}
+                for m in art["patterns"]]
+               + [{"kind": "dictionary", "term": m["term"], "name": m["rule"]["name"],
+                   "values": {v.strip().lower() for v in m["csv"].splitlines()[1:] if v.strip()}}
+                  for m in art["dictionaries"]])
+
+    # resolve each needed table/file ONCE, pull its stored profile once
+    needed = sorted({t for m in methods for (t, _c) in _srcs(m["term"])})
+    profiles, missing_parents = {}, set()
+    for t in needed:
+        types = ["FILE"] if t.lower().endswith(".csv") else ["TABLE", "VIEW"]
+        try:
+            ents = _with_pdc(p, lambda tok, t=t: pdc_mod.filter_entities(
+                p["base"], tok, {"names": [t], "types": types},
+                version=p["version"], verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception:
+            ents = []
+        ent = next((e for e in ents
+                    if str(((e.get("attributes") or {}).get("name")) or e.get("name") or "")
+                    .lower() == t.lower()), None)
+        if not ent:
+            missing_parents.add(t)
+            continue
+        try:
+            profiles[t] = _with_pdc(p, lambda tok, e=ent: pdc_mod.profiling_for_parent(
+                p["base"], tok, pdc_mod._eid(e), version=p["version"],
+                verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception:
+            missing_parents.add(t)
+
+    rows = []
+    for m in methods:
+        srcs = _srcs(m["term"])
+        if not srcs:
+            rows.append({"method": m["name"], "kind": m["kind"], "term": m["term"],
+                         "verdict": "unresolved", "detail": "no physical source in the Registry"})
+            continue
+        best = None
+        for (t, col) in srcs:
+            if t in missing_parents or t not in profiles:
+                cand = {"verdict": "unresolved", "source": f"{t}.{col}",
+                        "detail": "source not found in PDC"}
+            else:
+                prof = profiles[t].get(col.lower())
+                samples = (prof or {}).get("samples") or []
+                if not samples:
+                    cand = {"verdict": "no_samples", "source": f"{t}.{col}",
+                            "detail": "stored profile retained no sample values — "
+                                      "re-profile before trusting any score here"}
+                else:
+                    if m["kind"] == "pattern":
+                        try:
+                            rx = re.compile(m["regex"] or "")
+                            hits = sum(1 for v in samples if rx.search(v))
+                        except re.error:
+                            hits = 0
+                    else:
+                        hits = sum(1 for v in samples if v.strip().lower() in m["values"])
+                    rate = hits / len(samples)
+                    cand = {"verdict": "live" if hits else "dead",
+                            "source": f"{t}.{col}",
+                            "matched": hits, "samples": len(samples),
+                            "rate": round(rate, 2),
+                            "detail": None if hits else
+                            ("the seed matches NONE of the stored samples — the data "
+                             "moved underneath this method; example values: "
+                             + ", ".join(samples[:4]))}
+            # a method with several sources reports its BEST outcome; the
+            # weakest is still visible in the per-source rows below
+            order = {"live": 3, "dead": 2, "no_samples": 1, "unresolved": 0}
+            if best is None or order[cand["verdict"]] > order[best["verdict"]]:
+                best = cand
+        rows.append({"method": m["name"], "kind": m["kind"], "term": m["term"], **best})
+
+    counts = {k: sum(1 for r in rows if r["verdict"] == k)
+              for k in ("live", "dead", "no_samples", "unresolved")}
+    return {"prefix": art["prefix"], "rows": rows, "counts": counts}
+
+
 @app.post("/api/pdc/identified")
 def api_pdc_identified(body: IdentifiedRequest) -> dict:
     """What identification actually DID, column by column.
