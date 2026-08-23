@@ -311,6 +311,19 @@ def _tags(r):
             for a in rl.get("actions", []) for t in a.get("applyTags", [])]
 
 
+def _csv_values(csv_text):
+    """A dictionary's values, parsed as the CSV it actually is. The values
+    file is RFC 4180 (commas inside values are quoted — the 1.10.11 fix), so
+    reading it with splitlines() leaves literal quote characters on exactly
+    the values that needed quoting: the efficacy join called Service Cities
+    dead against samples its deployed method was matching fine, and the
+    Author preview displayed the quotes (found 2026-08-23)."""
+    import csv as _csv
+    import io as _io
+    rows = list(_csv.reader(_io.StringIO(csv_text or "")))
+    return [r[0] for r in rows[1:] if r and str(r[0]).strip()]
+
+
 @app.post("/api/preview")
 def api_preview(body: PrefixRequest | None = None) -> dict:
     """What author would emit, without writing anything — the review manifest."""
@@ -326,7 +339,7 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
 
     def _dic(d):
         r = d["rule"]
-        values = [v for v in d["csv"].splitlines()[1:] if v]
+        values = _csv_values(d["csv"])
         return {"name": r["name"], "term": d["term"], "term_id": d.get("term_id") or None,
                 "kind": "dictionary", "evidence": d.get("evidence") or "profiled",
                 "values": values[:200], "values_count": len(values),
@@ -1000,7 +1013,7 @@ def api_pdc_efficacy(body: PrefixRequest | None = None) -> dict:
                  "regex": (m["rule"].get("regexMatch") or {}).get("regex", [None])[0]}
                 for m in art["patterns"]]
                + [{"kind": "dictionary", "term": m["term"], "name": m["rule"]["name"],
-                   "values": {v.strip().lower() for v in m["csv"].splitlines()[1:] if v.strip()}}
+                   "values": {v.strip().lower() for v in _csv_values(m["csv"])}}
                   for m in art["dictionaries"]])
 
     # resolve each needed table/file ONCE, pull its stored profile once
@@ -1058,7 +1071,17 @@ def api_pdc_efficacy(body: PrefixRequest | None = None) -> dict:
                         except re.error:
                             hits = 0
                     else:
-                        hits = sum(1 for v in samples if v.strip().lower() in m["values"])
+                        # a multi-valued cell ("Casa Grande; Coolidge") still
+                        # matches PDC's similarity scoring — mirror that by
+                        # accepting any ;-separated token, not just the whole
+                        # cell (first live run wrongly called Service Cities
+                        # dead while its method was firing in PDC)
+                        def _hit(v):
+                            if v.strip().lower() in m["values"]:
+                                return True
+                            return any(t.strip().lower() in m["values"]
+                                       for t in v.split(";") if t.strip())
+                        hits = sum(1 for v in samples if _hit(v))
                     rate = hits / len(samples)
                     cand = {"verdict": "live" if hits else "dead",
                             "source": f"{t}.{col}",
