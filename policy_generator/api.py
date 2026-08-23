@@ -994,6 +994,20 @@ def api_pdc_identified(body: IdentifiedRequest) -> dict:
                 nm = (t or {}).get("name")
                 if nm:
                     tags_by_term.setdefault(m["term"], set()).add(str(nm).lower())
+    # Keys are (table, column), never the bare column name. Keyed by column
+    # alone, every system_name column in every table inherited the
+    # expectations of the three file/billing-side System Name dictionaries
+    # and read back "expected, nothing there" — three phantom warnings on the
+    # 2026-08-23 walk for concepts that never seeded a method on those
+    # tables. A source names its table; the verdict must too.
+    def _src_key(src):
+        parts = [p.strip() for p in str(src).split(".")]
+        if len(parts) == 3:                       # schema.table.column
+            return (parts[1].lower(), parts[2].lower())
+        if len(parts) == 4 and parts[2].lower() == "csv":   # schema.file.csv.column
+            return (f"{parts[1]}.csv".lower(), parts[3].lower())
+        return None
+
     # every column the Registry MAPS (any concept, method or not) — a term
     # bound there by the Glossary's Apply is the LINK working as designed,
     # not an identification surprise. Without this split, all 57 mapping-only
@@ -1002,16 +1016,16 @@ def api_pdc_identified(body: IdentifiedRequest) -> dict:
     mapped = {}
     for c in (_state["reg"].get("concepts") or []):
         for src in (c.get("sources") or []):
-            col = str(src).split(".")[-1].strip().lower()
-            if col:
-                mapped.setdefault(col, set()).add(c.get("term_name"))
+            key = _src_key(src)
+            if key:
+                mapped.setdefault(key, set()).add(c.get("term_name"))
         if c.get("term_name") not in authored:
             continue
         for src in (c.get("sources") or []):
-            col = str(src).split(".")[-1].strip().lower()
-            if col:
-                expected.setdefault(col, set()).add(c["term_name"])
-                expected_tags.setdefault(col, set()).update(
+            key = _src_key(src)
+            if key:
+                expected.setdefault(key, set()).add(c["term_name"])
+                expected_tags.setdefault(key, set()).update(
                     tags_by_term.get(c["term_name"], set()))
 
     tables, rows = [], []
@@ -1029,7 +1043,7 @@ def api_pdc_identified(body: IdentifiedRequest) -> dict:
         keep = cols          # resolved by parent, so every row belongs to this table
         tables.append({"table": t, "columns": len(keep)})
         for c in keep:
-            key = str(c["name"]).strip().lower()
+            key = (t.strip().lower(), str(c["name"]).strip().lower())
             want = expected.get(key, set())
             want_tags = expected_tags.get(key, set())
             got = set(c["business_terms"])

@@ -468,7 +468,7 @@ class TestIdentifiedReadBack:
     def test_verdict_per_column(self, api_client, registry_file, fake_pdc):
         client = self._ready(api_client, registry_file)
         body = client.post("/api/pdc/identified",
-                           json={"tables": ["customers"], "prefix": "Claims"}).json()
+                           json={"tables": ["members"], "prefix": "Claims"}).json()
         v = {r["column"]: r["verdict"] for r in body["rows"]}
         assert v["mbr_no"] == "expected_tagged",             "the method's own tag is on the column — a rule actually fired"
         assert v["state"] == "expected_missing", "deployed but never fired — the point of this view"
@@ -500,7 +500,7 @@ class TestIdentifiedReadBack:
             "base_url": "https://pdc", "username": "steward", "password": "good"})
         assert res.status_code == 200, res.text
         body = client.post("/api/pdc/identified",
-                           json={"tables": ["customers"], "prefix": "Claims"}).json()
+                           json={"tables": ["members"], "prefix": "Claims"}).json()
         v = {r["column"]: r["verdict"] for r in body["rows"]}
         assert v["notes"] == "link_governed", v
         assert body["counts"]["link_governed"] == 1
@@ -509,7 +509,7 @@ class TestIdentifiedReadBack:
     def test_reports_the_terms_on_both_sides(self, api_client, registry_file, fake_pdc):
         client = self._ready(api_client, registry_file)
         rows = client.post("/api/pdc/identified",
-                           json={"tables": ["customers"], "prefix": "Claims"}).json()["rows"]
+                           json={"tables": ["members"], "prefix": "Claims"}).json()["rows"]
         got = next(r for r in rows if r["column"] == "mbr_no")
         assert got["expected"] == ["Member Number"] and got["bound"] == ["Member Number"]
 
