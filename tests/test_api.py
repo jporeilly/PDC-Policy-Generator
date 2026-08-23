@@ -667,3 +667,94 @@ class TestProfileFreshness:
         res = client.post("/api/pdc/identify", json={
             "prefix": "Claims", "scope": ["e-1"], "allow_stale_profile": True})
         assert res.status_code == 200
+
+
+class TestRegistryScope:
+    """The governed estate as a scope: the Registry names the sources, PDC
+    supplies the ids, nobody recalls the estate from memory (the 2026-08-23
+    walk ran 'nine tables' while the catalog held eleven targets)."""
+
+    def _connect(self, client):
+        res = client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc.example", "username": "steward", "password": "good",
+        })
+        assert res.status_code == 200, res.text
+
+    def _registry_with_files(self, tmp_path):
+        reg = make_registry()
+        reg["concepts"].append(
+            {"term_name": "Pipe Status", "term_id": "t-500", "tags": ["pii"],
+             "category": "Infra",
+             "sources": ["claims.pipes.csv.status", "docs-bucket/scan/pipes_report"],
+             "detect": [{"type": "dictionary", "values": ["OK", "LEAK"]}]})
+        reg["concepts"].append(
+            {"term_name": "Customer Email", "term_id": "t-600", "tags": ["pii"],
+             "category": "Contact", "sources": ["claims.customers.email"],
+             "detect": [{"type": "pattern", "regex": "^.+@.+$"}]})
+        path = tmp_path / "registry.claims.json"
+        path.write_text(json.dumps(reg), encoding="utf-8")
+        return path
+
+    def test_scope_sources_needs_no_pdc(self, api_client, tmp_path):
+        client = loaded_client(api_client, self._registry_with_files(tmp_path))
+        body = client.get("/api/scope-sources").json()
+        tables = {t["name"]: t["governed"] for t in body["tables"]}
+        files = {f["name"]: f["governed"] for f in body["files"]}
+        assert tables == {"members": 2, "customers": 1}
+        assert files == {"pipes.csv": 1}          # bucket-path doc source skipped
+
+    def test_scope_candidates_resolves_ids_and_reports_misses(
+            self, api_client, tmp_path, fake_pdc):
+        client = loaded_client(api_client, self._registry_with_files(tmp_path))
+        self._connect(client)
+        body = client.post("/api/pdc/scope-candidates").json()
+        rows = {r["label"]: r for r in body["rows"]}
+        assert rows["customers"]["id"] == "e-2"   # resolved via the live lookup
+        assert rows["members"]["id"] is None      # not registered in PDC yet
+        assert "members" in body["unresolved"]
+        assert body["resolved"] >= 1
+
+
+class TestReconcileColumnEcho:
+    """PDC's search cannot see names with '&' in them (field 2026-08-23: both
+    'Infrastructure & Assets' terms reconciled MISSING while their deployed
+    methods fired). A mapped column's businessTerms echo proves the id alive."""
+
+    def _connect(self, client):
+        res = client.post("/api/pdc/connect", json={
+            "base_url": "https://pdc.example", "username": "steward", "password": "good",
+        })
+        assert res.status_code == 200, res.text
+
+    def test_missing_by_name_verifies_by_column_echo(
+            self, api_client, tmp_path, fake_pdc, monkeypatch):
+        from policy_generator import api as api_mod
+        reg = make_registry()
+        reg["concepts"].append(
+            {"term_name": "Status (Infrastructure & Assets)", "term_id": "t-777",
+             "tags": ["pii"], "category": "Infra",
+             "sources": ["claims.pipes.csv.status"],
+             "detect": [{"type": "dictionary", "values": ["OK", "LEAK"]}]})
+        path = tmp_path / "registry.claims.json"
+        path.write_text(json.dumps(reg), encoding="utf-8")
+        client = loaded_client(api_client, path)
+        self._connect(client)
+
+        def filter_entities(base, token, filters, version="v3", verify_tls=False, timeout=20):
+            if [str(n).lower() for n in (filters or {}).get("names", [])] == ["status"]:
+                return [{"_id": "col-9", "attributes": {
+                    "name": "status", "type": "COLUMN",
+                    "businessTerms": [{"termId": "t-777",
+                                       "name": "Status (Infrastructure & Assets)",
+                                       "glossaryId": "g-1"}]}}]
+            return []
+        monkeypatch.setattr(api_mod.pdc_mod, "filter_entities", filter_entities)
+
+        body = client.post("/api/reconcile", json={}).json()
+        row = next(r for r in body["rows"]
+                   if r["term"] == "Status (Infrastructure & Assets)")
+        assert row["status"] == "verified", row
+        assert row["via"] == "column-echo"
+        assert row["pdc_id"] == "t-777" and row["glossary_id"] == "g-1"
+        # a name-missing concept WITHOUT an echo stays honestly missing
+        assert any(r["status"] == "missing" for r in body["rows"])

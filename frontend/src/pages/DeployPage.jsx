@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /* Deploy — import the authored method set into PDC over the discovered
    import API (multipart /api/importWorkerFiles — the same path PDC 11's own
@@ -62,6 +62,7 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
   const [jobStatus, setJobStatus] = useState(null)
   const [look, setLook] = useState('')          // table-name search
   const [hits, setHits] = useState(null)        // {count, entities}
+  const [scopeMsg, setScopeMsg] = useState(null) // registry-scope result line
 
   // The guard returns 409 with the terms named. Offer the override where the
   // refusal appears, so the steward can act on it without reading API docs —
@@ -113,6 +114,25 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
     })
   }
 
+  // You identify against what you GOVERN — and the loaded Registry already
+  // knows what that is. One click resolves every governed table and file-side
+  // CSV to its entity id; nobody recalls the estate from memory (which is how
+  // the 2026-08-23 walk ran "nine tables" while the catalog held eleven).
+  async function scopeFromRegistry() {
+    setBusy(true); setError(null); setScopeMsg(null)
+    try {
+      const d = await post('/api/pdc/scope-candidates', {})
+      const ids = d.rows.filter((r) => r.id).map((r) => r.id)
+      setScopeText(ids.join('\n'))
+      const named = d.rows.filter((r) => r.id)
+        .map((r) => `${r.label} (${r.governed})`).join(', ')
+      setScopeMsg({
+        text: `scoped to the governed estate — ${d.resolved} of ${d.total} source(s): ${named}`,
+        unresolved: d.unresolved,
+      })
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
   // Firing a job and never asking how it went is how a run gets called a
   // success. The status carries the per-job lines PDC's Workers page shows.
   async function checkJob() {
@@ -121,6 +141,20 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
     try { setJobStatus(await post('/api/pdc/job', { id: job.job_id })) }
     catch (err) { setError(err.message) } finally { setBusy(false) }
   }
+
+  // A queued job polls itself — "i have to keep clicking to see if the job
+  // has finished" (field 2026-08-23). Every 5s until a terminal state or the
+  // page unmounts; the manual button stays for an impatient re-check.
+  useEffect(() => {
+    if (!job?.job_id) return undefined
+    const st = String(jobStatus?.status || '').toUpperCase()
+    if (['COMPLETED', 'SUCCESS', 'FAILED', 'ERROR', 'CANCELLED'].includes(st)) return undefined
+    const t = setInterval(async () => {
+      try { setJobStatus(await post('/api/pdc/job', { id: job.job_id })) }
+      catch { /* transient — the next tick retries */ }
+    }, 5000)
+    return () => clearInterval(t)
+  }, [job?.job_id, jobStatus?.status])
 
   async function identify() {
     const scope = scopeText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
@@ -309,6 +343,9 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
           line). Never catalog-wide from here; deploy first.
         </p>
         <div className="actions">
+          <button className="primary" onClick={scopeFromRegistry} disabled={busy || !pdc}>
+            ⛭ Scope from Registry
+          </button>
           <input className="text" value={look} onChange={(e) => setLook(e.target.value)}
                  placeholder="find a table by name, e.g. customers"
                  onKeyDown={(e) => { if (e.key === 'Enter') findEntities() }} />
@@ -316,6 +353,13 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
             🔍 Find tables
           </button>
         </div>
+        {scopeMsg && (
+          <p className={`summary ${scopeMsg.unresolved?.length ? 'warn' : 'ok'}`}>
+            {scopeMsg.text}
+            {scopeMsg.unresolved?.length > 0 &&
+              <> · not found in PDC (register/bulk-load them first): {scopeMsg.unresolved.join(', ')}</>}
+          </p>
+        )}
         {hits && (
           hits.count === 0
             ? <p className="hint-line">Nothing in the catalog matches “{hits.q}”.</p>
@@ -353,8 +397,14 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
               </span>
               <button className="ghost" style={{ marginLeft: '.6rem' }}
                       onClick={checkJob} disabled={busy || !job.job_id}>
-                {busy ? 'Checking…' : '↻ Check job'}
+                {busy ? 'Checking…' : '↻ Check now'}
               </button>
+              {!['COMPLETED', 'SUCCESS', 'FAILED', 'ERROR', 'CANCELLED']
+                .includes(String(jobStatus?.status || '').toUpperCase()) && (
+                <span className="notes" style={{ marginLeft: '.6rem' }}>
+                  auto-refreshing every 5s until the worker finishes
+                </span>
+              )}
             </p>
             {jobStatus && (
               jobStatus.found === false

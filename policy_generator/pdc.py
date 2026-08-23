@@ -457,6 +457,45 @@ def get_method(base_url, token, kind, _id, verify_tls=True, timeout=30):
     return data.get(spec["by_id"]) or {}
 
 
+def confirm_term_by_column_echo(base_url, token, term_name, term_id, sources,
+                                version="v3", verify_tls=True, timeout=20):
+    """Prove a term is alive by its id when every NAME lookup misses.
+
+    PDC's search cannot find names containing '&' (field 2026-08-23: both
+    'Infrastructure & Assets' terms reconciled as MISSING while their methods
+    were deployed and firing), and /entities/{id} does not serve term ids at
+    all — so neither name nor id can be asked directly. But a column the
+    Glossary mapped to the term carries businessTerms[{termId, name}], and PDC
+    echoes the term's NAME against the id it stores — an echo it can only
+    produce if the term exists under that id. Returns
+    {'id', 'glossaryId', 'via': 'column-echo'} or None."""
+    cols = []
+    for s in sources or []:
+        if not isinstance(s, str):
+            continue
+        col = s.rsplit(".", 1)[-1].strip()
+        if col and col not in cols:
+            cols.append(col)
+    want_name = (term_name or "").strip().lower()
+    for col in cols[:4]:
+        try:
+            ents = filter_entities(base_url, token, {"names": [col]},
+                                   version, verify_tls, timeout)
+        except TokenExpired:
+            raise
+        except Exception:
+            continue
+        for e in ents:
+            a = e.get("attributes") or {}
+            for bt in (a.get("businessTerms") or e.get("businessTerms") or []):
+                tid = bt.get("termId") or bt.get("id")
+                if (tid and str(tid) == str(term_id)
+                        and str(bt.get("name", "")).strip().lower() == want_name):
+                    return {"id": tid, "glossaryId": bt.get("glossaryId"),
+                            "via": "column-echo"}
+    return None
+
+
 def bind_business_term(base_url, token, kind, _id, term_name, term_id,
                        verify_tls=True, timeout=30):
     """Stamp applyBusinessTerms [{name, id}] into every action of the method's

@@ -1,5 +1,63 @@
 # Changelog
 
+## [1.10.15] - 2026-08-23
+
+The clean-walk batch: everything field-caught on the 2026-08-23 end-to-end
+walkthrough, which closed with drift-check 39/39 clean and a read-back of
+35 columns tagged as governed.
+
+### Changed - dictionaries that share a vocabulary must also match the column name
+
+Field: the four per-context Status dictionaries share Active/Inactive-style
+values, and PDC's dictionary confidence is similarity x 0.9 + metadata x 0.1
+- a name anchor can nudge but never veto, so each bound its term onto every
+status-shaped column: 57 unexpected bindings in one identification run. The
+Registry knows every dictionary's value set, so the collision is computable
+at author time: where two dictionaries share at least half of the smaller
+vocabulary, the blend rebalances to similarity 0.5 + metadataScore 0.5
+against the same "0.7" gate - values alone can no longer pass, the column
+NAME must agree (the same conjunction name-anchored patterns already use).
+Non-overlapping dictionaries keep the loose blend: their values alone ARE
+proof. The artifact rows carry `shared_vocabulary_with` so the review
+manifest shows which methods were tightened and why. On the Arizona
+registry: 13 of 32 dictionaries tightened, 19 untouched.
+
+### Fixed - Reconcile reported terms MISSING that were deployed and firing
+
+PDC's search cannot see names containing '&' (both 'Infrastructure &
+Assets' terms), and /entities/{id} does not serve term ids - so neither
+name nor id could be asked directly and the terms reconciled MISSING
+forever. New column-echo proof: a column the Glossary mapped to the term
+carries businessTerms[{termId, name}], and PDC echoes the term's NAME
+against the stored id - an echo it can only produce if the term exists
+under that id. Such rows now reconcile "verified (by id)" with the
+explanation in the badge tooltip; a miss with no echo stays honestly
+missing.
+
+### Added - the governed estate as a one-click identification scope
+
+"The user has to remember the tables, schemas..." - and under-scopes the
+estate silently (the walk ran 'nine tables' for two days while the catalog
+held eleven targets). New `Scope from Registry` on the Deploy page: the
+loaded Registry names every governed table and file-side CSV, PDC resolves
+them to entity ids, the scope box fills itself; sources not yet registered
+in PDC are listed rather than dropped. The Report page's identification
+read-back prefills its table list from the same source
+(GET /api/scope-sources, registry-only; POST /api/pdc/scope-candidates
+resolves ids).
+
+### Fixed - the identification job polls itself
+
+"I have to keep clicking to see if the job has finished." A queued job now
+refreshes its status every 5 seconds until the worker reaches a terminal
+state; the manual button stays for an impatient re-check.
+
+### Fixed - the import zip download says what it saved
+
+The desktop shell saves silently; the Author card now confirms the saved
+filename and size and points at the Downloads folder - or says the download
+failed, which previously looked identical to success.
+
 ## [1.10.14] - 2026-08-22
 
 ### Changed - the username hint names the KIND of login, never an account

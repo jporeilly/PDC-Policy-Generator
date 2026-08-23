@@ -459,6 +459,78 @@ def _with_pdc(p: dict, call):
             raise _expired()
 
 
+def _registry_scope_sources():
+    """Distinct governed sources from the loaded Registry: the tables and
+    file-side CSVs its concepts actually map, with governed-column counts.
+    Bucket-path document sources (awc-documents/...) are not identification
+    targets and are skipped."""
+    tables, files = {}, {}
+    for c in _state["reg"].get("concepts", []):
+        if not isinstance(c, dict):
+            continue
+        for s in c.get("sources") or []:
+            if not isinstance(s, str) or "/" in s:
+                continue
+            parts = s.split(".")
+            if len(parts) == 3:
+                tables[parts[1]] = tables.get(parts[1], 0) + 1
+            elif len(parts) == 4 and parts[2].lower() == "csv":
+                fn = parts[1] + ".csv"
+                files[fn] = files.get(fn, 0) + 1
+    return tables, files
+
+
+@app.get("/api/scope-sources")
+def api_scope_sources() -> dict:
+    """The governed estate, from the Registry alone (no PDC needed): what an
+    identification scope or read-back SHOULD cover. Exists because a human
+    recalling the estate under-scopes it silently — the 2026-08-23 walk ran
+    'nine tables' for two days while the catalog held eleven targets."""
+    _require_registry()
+    tables, files = _registry_scope_sources()
+    return {"tables": [{"name": t, "governed": n} for t, n in sorted(tables.items())],
+            "files": [{"name": f, "governed": n} for f, n in sorted(files.items())]}
+
+
+@app.post("/api/pdc/scope-candidates")
+def api_pdc_scope_candidates() -> dict:
+    """The governed estate resolved to PDC entity ids — a ready-made
+    identification scope. The Registry names the sources; PDC supplies the
+    ids; nobody has to remember either."""
+    _require_registry()
+    p = _require_pdc()
+    tables, files = _registry_scope_sources()
+    rows = []
+
+    def _resolve(names, types, kind, counts):
+        if not names:
+            return
+        try:
+            ents = _with_pdc(p, lambda tok: pdc_mod.filter_entities(
+                p["base"], tok, {"names": sorted(names), "types": types},
+                version=p["version"], verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"entity lookup failed: {e}")
+        byname = {}
+        for e in ents:
+            a = e.get("attributes") or {}
+            nm = str(a.get("name") or e.get("name") or "").lower()
+            byname.setdefault(nm, e)
+        for n in sorted(names):
+            e = byname.get(n.lower())
+            rows.append({"label": n, "kind": kind, "governed": counts[n],
+                         "id": pdc_mod._eid(e) if e else None})
+
+    _resolve(set(tables), ["TABLE", "VIEW"], "table", tables)
+    _resolve(set(files), ["FILE"], "file", files)
+    return {"rows": rows,
+            "resolved": sum(1 for r in rows if r["id"]),
+            "unresolved": [r["label"] for r in rows if not r["id"]],
+            "total": len(rows)}
+
+
 @app.post("/api/pdc/methods")
 def api_pdc_methods(body: PrefixRequest | None = None) -> dict:
     """List the custom Data Identification methods in PDC, scoped to a name
@@ -1149,9 +1221,12 @@ def _reconcile_rows(concepts, found):
             status = "resolved"
         else:
             status = "missing"
-        rows.append({"term": name, "registry_id": reg_id, "pdc_id": pdc_id,
-                     "glossary_id": hit.get("glossaryId"), "status": status,
-                     "seeded": bool(c.get("detect"))})
+        row = {"term": name, "registry_id": reg_id, "pdc_id": pdc_id,
+               "glossary_id": hit.get("glossaryId"), "status": status,
+               "seeded": bool(c.get("detect"))}
+        if hit.get("via"):
+            row["via"] = hit["via"]   # e.g. column-echo: verified by id, not name
+        rows.append(row)
     return rows
 
 
@@ -1183,6 +1258,25 @@ def api_reconcile(body: ReconcileRequest | None = None) -> dict:
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"PDC lookup failed: {e}")
+    # Name-search misses with a Registry id get one more chance: the
+    # column-echo proof (see pdc.confirm_term_by_column_echo). Without it the
+    # ampersand terms reconcile MISSING forever while their deployed methods
+    # fire happily — a false alarm the steward cannot distinguish from a
+    # genuinely absent term.
+    for c in chunk:
+        nm, rid = c.get("term_name"), c.get("term_id")
+        if not nm or not rid or (found.get(nm) or {}).get("id"):
+            continue
+        try:
+            hit = _with_pdc(p, lambda tok, c=c: pdc_mod.confirm_term_by_column_echo(
+                p["base"], tok, c.get("term_name"), c.get("term_id"),
+                c.get("sources"), version=p["version"], verify_tls=p["verify_tls"]))
+        except HTTPException:
+            raise
+        except Exception:
+            hit = None
+        if hit:
+            found[nm] = hit
     rows = _reconcile_rows(chunk, found)
     if limit is None:
         _state["reconcile"] = rows

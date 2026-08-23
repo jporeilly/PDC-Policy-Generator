@@ -1,6 +1,17 @@
 # Version
 
-**1.10.14** — 2026-08-21
+**1.10.15** — 2026-08-23
+
+The clean-walk batch. Dictionaries that share a vocabulary now also require
+the column name to agree (13 of 32 tightened on the Arizona registry — the
+57-unexpected-bindings cross-fire from the walk's read-back); Reconcile
+proves ampersand terms alive by their id through a mapped column's
+businessTerms echo instead of reporting them missing; the Deploy page scopes
+identification from the Registry in one click and the queued job polls
+itself; the Author download confirms what it saved. Retire fetches its own
+method list (the "I click Retire set and nothing happens" fix).
+
+Previously — **1.10.14** (2026-08-21):
 
 The Load overview now explains the five stages as tiles — numbered dot, title,
 explanation and a Go-to button per stage, the Glossary Generator's Home

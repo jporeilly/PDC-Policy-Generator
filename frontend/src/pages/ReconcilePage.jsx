@@ -242,7 +242,12 @@ export default function ReconcilePage({ summary, onSummary, pdc, onNavigate }) {
                   return (
                     <tr key={r.term}>
                       <td>{r.term}</td>
-                      <td><span className={`badge ${s.cls}`} title={s.tip}>{s.icon} {r.status}</span></td>
+                      <td><span className={`badge ${s.cls}`}
+                                title={r.via === 'column-echo'
+                                  ? 'PDC search cannot see this name (e.g. an & in it) — proven alive by its id instead: a mapped column echoes the term name against this exact termId'
+                                  : s.tip}>
+                        {s.icon} {r.status}{r.via === 'column-echo' ? ' (by id)' : ''}
+                      </span></td>
                       <td className="mono cell-clip" title={r.registry_id ?? ''}>{r.registry_id ?? '—'}</td>
                       <td className="mono cell-clip" title={r.pdc_id ?? ''}>{r.pdc_id ?? '—'}</td>
                       <td className="notes">{r.seeded ? 'yes' : '—'}</td>

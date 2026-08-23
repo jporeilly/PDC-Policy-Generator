@@ -305,7 +305,42 @@ def author(reg: dict, prefix: str = None) -> dict:
                                             c.get("term_id"), f"{slug}.csv",
                                             len(seed["values"])),
                     "csv": _csv([("Term",)] + [(str(v),) for v in seed["values"]]),
+                    # kept only until the shared-vocabulary pass below, then dropped
+                    "_values": frozenset(str(v).strip().lower()
+                                         for v in seed["values"] if str(v).strip()),
                 })
+    # Dictionaries whose VALUE SETS collide cross-fire: PDC's dictionary
+    # confidence is similarity x 0.9 + metadataScore x 0.1, so a name anchor
+    # can only nudge, never veto — on this estate the four per-context Status
+    # vocabularies (Active/Inactive/...) each bound their term onto every
+    # status-shaped column, 57 unexpected bindings in one identification run
+    # (read-back, 2026-08-23). The Registry knows every value set, so the
+    # collision is computable at author time: where two dictionaries share
+    # >= half of the smaller vocabulary, the blend rebalances to
+    # similarity 0.5 + metadataScore 0.5 against the same "0.7" gate — values
+    # alone (0.5) can no longer pass, the column NAME must agree. Same
+    # conjunction the name-anchored patterns already use. Non-overlapping
+    # dictionaries keep the loose blend: their values alone ARE proof.
+    for i, a in enumerate(dictionaries):
+        partners = []
+        for j, b in enumerate(dictionaries):
+            if i == j or not a["_values"] or not b["_values"]:
+                continue
+            inter = len(a["_values"] & b["_values"])
+            if inter and inter / min(len(a["_values"]), len(b["_values"])) >= 0.5:
+                partners.append(b["term"])
+        hints = (a["rule"].get("metadataHints") or {}).get("aliases")
+        if partners and hints:
+            a["rule"]["rules"][0]["confidenceScore"] = {"+": [
+                {"*": [{"var": "similarity"}, 0.5]},
+                {"*": [{"var": "metadataScore"}, 0.5]},
+            ]}
+            # the alias score mirrors the blend's name weight, so the hint and
+            # the confidence formula never tell PDC two different stories
+            hints[0]["score"] = 0.5
+            a["shared_vocabulary_with"] = sorted(partners)
+    for a in dictionaries:
+        a.pop("_values", None)
     # A content regex claimed by more than one method identifies none of them:
     # on the Arizona estate one induced shape backed EIGHT concepts, and a
     # free-text column came back bound to all eight. The Registry now marks such

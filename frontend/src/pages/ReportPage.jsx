@@ -33,6 +33,19 @@ export default function ReportPage({ summary, pdc, prefix: initialPrefix }) {
   const [tables, setTables] = useState('')        // names to read identification back from
   const [ident, setIdent] = useState(null)
 
+  // Prefill the read-back scope from the Registry: you read back what you
+  // GOVERN, and nobody should have to recall the estate's table names (the
+  // scope box and this field asked twice; the Registry knew both times).
+  // Files are excluded — the read-back walks TABLE/VIEW children only.
+  useEffect(() => {
+    if (tables) return undefined
+    let dead = false
+    fetch('/api/scope-sources').then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!dead && d?.tables?.length) setTables(d.tables.map((t) => t.name).join(' '))
+    }).catch(() => {})
+    return () => { dead = true }
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
   const post = async (url, body) => {
     const res = await fetch(url, {
       method: 'POST',

@@ -1,6 +1,7 @@
 """Engine tests: registry validation + deterministic authoring.
 Ports the invariants the old selftest.py checked into pytest."""
 
+import copy
 import io
 import json
 import zipfile
@@ -111,6 +112,40 @@ class TestAuthor:
         assert d["rule"]["rowCount"] == 3
         # unresolved id: binding is by name only
         assert d["rule"]["rules"][0]["actions"][0]["applyBusinessTerms"] == [{"name": "State Code"}]
+
+    def test_shared_vocabularies_require_the_column_name(self, registry):
+        """Field 2026-08-23: four per-context Status dictionaries shared
+           Active/Inactive-style values and each bound its term onto every
+           status-shaped column — 57 unexpected bindings in one run, because
+           the stock blend (similarity 0.9 + metadata 0.1) lets values alone
+           clear the 0.7 gate. Dictionaries sharing >= half of the smaller
+           vocabulary rebalance to 0.5/0.5 so the column NAME must agree;
+           non-overlapping dictionaries keep the loose blend."""
+        reg = copy.deepcopy(registry)
+        reg["concepts"].append(
+            {"term_name": "Ship State", "term_id": "t-200",
+             "category": "Geo", "tags": ["pii"],
+             "sources": ["claims.shipments.ship_state"],
+             "detect": [{"type": "dictionary", "values": ["CA", "NY", "AZ"]}]})
+        reg["concepts"].append(
+            {"term_name": "Currency", "term_id": "t-300",
+             "category": "Finance", "tags": ["finance"],
+             "sources": ["claims.billing.currency"],
+             "detect": [{"type": "dictionary", "values": ["USD", "EUR", "GBP"]}]})
+        arts = {d["term"]: d for d in author.author(reg)["dictionaries"]}
+        state, ship, curr = arts["State Code"], arts["Ship State"], arts["Currency"]
+        # the colliding pair (2 of 3 values shared) is tightened, both ways…
+        for d, partner in ((state, "Ship State"), (ship, "State Code")):
+            assert d["shared_vocabulary_with"] == [partner]
+            weights = [p["*"][1] for p in d["rule"]["rules"][0]["confidenceScore"]["+"]]
+            assert weights == [0.5, 0.5], weights
+            assert d["rule"]["metadataHints"]["aliases"][0]["score"] == 0.5
+        # …the disjoint dictionary keeps the loose blend
+        assert "shared_vocabulary_with" not in curr
+        weights = [p["*"][1] for p in curr["rule"]["rules"][0]["confidenceScore"]["+"]]
+        assert weights == [0.9, 0.1], weights
+        # the temporary value-set key never leaks into the artifact
+        assert all("_values" not in d for d in arts.values())
 
     def test_deterministic_ids(self, registry):
         a = author.author(registry)

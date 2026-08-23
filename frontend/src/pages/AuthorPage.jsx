@@ -89,6 +89,7 @@ export default function AuthorPage({ summary }) {
   const [busy, setBusy] = useState(false)
   const [seedBusy, setSeedBusy] = useState(false)
   const [seedMsg, setSeedMsg] = useState(null)   // {ok, text}
+  const [dlMsg, setDlMsg] = useState(null)       // {ok, text} — download confirmation
 
   const runPreview = useCallback(async (p) => {
     setBusy(true)
@@ -112,12 +113,13 @@ export default function AuthorPage({ summary }) {
   useEffect(() => { runPreview(prefix) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function download() {
+    setDlMsg(null)
     const res = await fetch('/api/author', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prefix: prefix || null }),
     })
-    if (!res.ok) return
+    if (!res.ok) { setDlMsg({ ok: false, text: `download failed (HTTP ${res.status})` }); return }
     const blob = await res.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -125,6 +127,10 @@ export default function AuthorPage({ summary }) {
       ?? 'data-identification.zip'
     a.click()
     URL.revokeObjectURL(a.href)
+    // the desktop shell saves silently — say what was saved and where to look,
+    // instead of leaving the steward to go check the folder ("would be nice to
+    // confirm download to the Downloads folder", field 2026-08-23)
+    setDlMsg({ ok: true, text: `saved ${a.download} (${Math.round(blob.size / 1024)} KB) to your Downloads folder` })
   }
 
   const skippedByBucket = {}
@@ -230,6 +236,11 @@ export default function AuthorPage({ summary }) {
             </button>
           </div>
         </header>
+        {dlMsg && (
+          <p className={`summary ${dlMsg.ok ? 'ok' : 'warn'}`}>
+            {dlMsg.ok ? '✓ ' : '⚠ '}{dlMsg.text}
+          </p>
+        )}
         <p className="hint-line">
           Deterministic and offline: every regex, reference list and steward decision below
           travels inside the Registry — nothing is re-decided here. The <b>Evidence</b> column
