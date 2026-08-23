@@ -1,6 +1,6 @@
 {
   "name": "pdc-policy-desktop",
-  "version": "1.10.15",
+  "version": "1.10.16",
   "private": true,
   "description": "Windows desktop shell for the PDC Policy Generator",
   "scripts": {

@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.10.16] - 2026-08-23
+
+Field catches from the 1.10.15 verification walk, same afternoon.
+
+### Changed - the read-back names link-governed columns for what they are
+
+"But where are the Tags?" - all 57 mapping-only columns (customer_name,
+addresses, dates, free text) read back as "unexpected", and the count was
+briefly mistaken for dictionary cross-fire. A bound term the Registry MAPS
+to that column while no method claims it is the Glossary Apply link
+governing by design; the read-back now gives those their own green
+verdict, "link-governed (by design)", with the doctrine in the tooltip -
+structured shapes are identified by their values and get tags; names and
+free text are governed by their associations and don't. "Unexpected" now
+means what it says: a term the Registry neither identifies nor maps there.
+
+### Added - the Author preview shows which dictionaries were blend-tightened
+
+The 1.10.15 shared-vocabulary tightening changed deployed behaviour with
+nothing in the review manifest saying so. The dictionaries table gains a
+Blend column: "name required" (with the colliding siblings in the badge)
+vs "values suffice".
+
+### Fixed - stepper connectors no longer render as floating dashes
+
+flex: 1 forced equal step widths (row/5) while the labelled buttons need
+more - every button overflowed its slot and the connector collapsed to
+its 18px minimum, a dash floating in a void (reported twice). Steps now
+size from content and the bar spans the actual gap.
+
 ## [1.10.15] - 2026-08-23
 
 The clean-walk batch: everything field-caught on the 2026-08-23 end-to-end

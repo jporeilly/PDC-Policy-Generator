@@ -1,6 +1,15 @@
 # Version
 
-**1.10.15** — 2026-08-23
+**1.10.16** — 2026-08-23
+
+Same-afternoon catches from the 1.10.15 verification walk. The read-back
+gives mapping-only columns their own green "link-governed (by design)"
+verdict instead of filing them under "unexpected" (the answer to "but
+where are the Tags?" now lives in the app); the Author preview shows
+which dictionaries were blend-tightened and why; the workflow stepper's
+connectors span the gap instead of floating as dashes.
+
+Previously — **1.10.15** (2026-08-23):
 
 The clean-walk batch. Dictionaries that share a vocabulary now also require
 the column name to agree (13 of 32 tightened on the Arizona registry — the
