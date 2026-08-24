@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.10.17] - 2026-08-24
+
+### Added - efficacy check: does each deployed method still match any DATA? (spec backlog 5)
+
+The third instrument. Re-profiling reads the data; Drift reads the
+deployment; neither joins them - a method whose data moved underneath it
+reports drift-CLEAN and fires never. POST /api/pdc/efficacy evaluates
+every authored seed against the STORED profile samples identification
+actually scores with (one profiling-info call per source table/file):
+live (rate reported) / dead (samples exist, zero match, the replacing
+values shown) / no_samples (re-profile first) / unresolved. Card on the
+Drift page. Live-verified on the Arizona estate: 38 live / 0 dead /
+1 unresolved. Two of its own first-pass bugs fixed on the way: live PDC
+serves samples as profilingInfo.sampleValues (not sampling.sample), and
+dictionary values are CSV - splitlines() left RFC 4180 quotes on exactly
+the values that needed quoting, falsely calling Service Cities dead (the
+same bug showed quoted values in the Author preview).
+
+### Fixed - read-back verdicts key by (table, column), not bare column name
+
+Keyed by column alone, every system_name column in every table inherited
+the expectations of the three file/billing-side System Name dictionaries
+and read back "expected, nothing there" - three phantom warnings on the
+2026-08-23 walk for concepts that never seeded a method on those tables.
+
+### Fixed - the installer's bar moves during the delete phase
+
+Same marquee treatment as the Glossary Generator's 1.40.0 (spec backlog
+12): the bar runs as a marquee while the previous version's vendored
+Python deletes, instead of parking at 0% and reading as a hang.
+
+### Also riding (committed 2026-08-23): the Author preview's Blend column
+("name required" vs "values suffice"), the read-back's link-governed
+verdict, and stepper connectors that span the gap.
+
 ## [1.10.16] - 2026-08-23
 
 Field catches from the 1.10.15 verification walk, same afternoon.

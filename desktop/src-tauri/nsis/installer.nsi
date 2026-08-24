@@ -669,6 +669,40 @@ Section "-WebView2"
   ${EndIf}
 SectionEnd
 
+; ---------------------------------------------------------------------------
+; Marquee during the delete phases (spec backlog 12). NSIS weights its gauge
+; almost entirely by extraction bytes, so removing the old vendored Python
+; tree (thousands of files, most of an upgrade's wall time) leaves the bar
+; parked near 0% and the install reads as a hang - field-caught twice,
+; 2026-08-23, with a screenshot. A determinate bar cannot be honest about a
+; phase NSIS gives no weight, so the bar becomes a MARQUEE (barber pole)
+; while old files delete and returns to normal for extraction, whose byte
+; weighting is accurate. Degrades harmlessly: if the control lookup fails,
+; the bar simply stays as it was.
+!define /ifndef PBS_MARQUEE 0x08
+!define /ifndef PBM_SETMARQUEE 0x040A
+
+!macro DeletePhaseMarquee ON
+  Push $R7
+  Push $R9
+  FindWindow $R9 "#32770" "" $HWNDPARENT
+  GetDlgItem $R9 $R9 0x3EC              ; 1004 = the InstFiles progress bar
+  ${If} $R9 <> 0
+    System::Call 'user32::GetWindowLongW(p $R9, i -16) i .R7'
+    !if "${ON}" == "1"
+      IntOp $R7 $R7 | ${PBS_MARQUEE}
+      System::Call 'user32::SetWindowLongW(p $R9, i -16, i R7)'
+      SendMessage $R9 ${PBM_SETMARQUEE} 1 40
+    !else
+      SendMessage $R9 ${PBM_SETMARQUEE} 0 0
+      IntOp $R7 $R7 & 0xFFFFFFF7
+      System::Call 'user32::SetWindowLongW(p $R9, i -16, i R7)'
+    !endif
+  ${EndIf}
+  Pop $R9
+  Pop $R7
+!macroend
+
 Section "-Install"
   SectionIn 1 2 RO
   SetOutPath $INSTDIR
@@ -684,7 +718,10 @@ Section "-Install"
   ; adds and overwrites, so a dependency dropped between releases would linger
   ; and keep being importable. Left in place would make "what shipped" and
   ; "what is installed" quietly different.
+  !insertmacro DeletePhaseMarquee 1
+  DetailPrint "Removing the previous version's files (the bar resumes at extraction)..."
   RMDir /r "$INSTDIR\python"
+  !insertmacro DeletePhaseMarquee 0
 
   ; Status line only for the extraction: the progress text at the top keeps
   ; moving, but 12,000 "Extract: ..." lines stay out of the log, which exists to
@@ -879,6 +916,7 @@ Section Uninstall
 
   ; Delete the app directory and its content from disk
   ; Copy main executable
+  !insertmacro DeletePhaseMarquee 1
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"
 
   ; Delete resources
@@ -925,6 +963,7 @@ Section Uninstall
   RMDir /r "$INSTDIR\app"
   RMDir /r "$INSTDIR\provisioning"
   RMDir "$INSTDIR"
+  !insertmacro DeletePhaseMarquee 0
 
   ; Remove shortcuts if not updating
   ${If} $UpdateMode <> 1

@@ -1,6 +1,14 @@
 # Version
 
-**1.10.16** — 2026-08-23
+**1.10.17** - 2026-08-24
+
+The efficacy release: every authored seed judged against the stored
+profile samples identification actually scores with (38 live / 0 dead on
+the Arizona estate at birth), read-back verdicts keyed by (table, column),
+the link-governed verdict and Blend column from the walk's catches, and a
+marquee for the installer's delete phase.
+
+Previously - **1.10.16** — 2026-08-23
 
 Same-afternoon catches from the 1.10.15 verification walk. The read-back
 gives mapping-only columns their own green "link-governed (by design)"
