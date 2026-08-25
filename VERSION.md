@@ -1,6 +1,16 @@
 # Version
 
-**1.11.0** - 2026-08-25
+**1.11.1** - 2026-08-25
+
+P8, the catch from the 1.11.0 field walk: the stepped delete bar is
+install-pre-clean only. On uninstall the per-file deletes have already
+emptied the vendored trees, so the takeover swept near-empty folders in
+a blink ("the green bar flashes far too quickly across") - and uninstall
+progress weighs every instruction equally, so the native bar was already
+honest. Install keeps the field-verified stepped bar; uninstall keeps
+the native one and just silences the per-file torrent.
+
+Previously - **1.11.0** - 2026-08-25
 
 The P-batch: everything the 2026-08-25 Policy walk-half logged (P1-P7 in
 the Glossary repo's SPEC-BACKLOG). Single-token column hints ANCHOR so a

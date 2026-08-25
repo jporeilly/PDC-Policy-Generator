@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.11.1] - 2026-08-25
+
+### Fixed - the stepped delete bar is install-pre-clean only (P8)
+
+The 1.11.0 field walk caught the uninstall's green bar flashing "far too
+quickly across". By the time the belt-and-braces RMDirs run, the
+uninstaller's own per-file deletes have already emptied the vendored
+trees, so the stepped takeover swept near-empty folders in a blink - and
+uninstall progress weighs every instruction equally, so the native bar
+was already moving honestly across the per-file torrent. The takeover
+earns its keep only on the INSTALL pre-clean, where the whole old tree
+deletes under a byte-weighted bar that would not move. The uninstall now
+keeps the native bar and just silences the per-file "Delete file:" lines
+(ships the already-committed P8 fix; the section comments now say the
+same thing the code does).
+
 ## [1.11.0] - 2026-08-25
 
 The P-batch: every catch the clean walkthrough's Policy half logged
