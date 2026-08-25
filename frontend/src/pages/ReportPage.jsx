@@ -215,11 +215,19 @@ Registry, the authored set${dc ? ' and the live catalog' : ''} at compile time.<
           <div className="tile"><div className="value">{summary.governed_tags}</div><div className="label">governed tags</div></div>
           <div className="tile"><div className="value">{summary.off_vocabulary ?? 0}</div><div className="label">off-vocabulary</div></div>
         </div>
-        {(summary.unresolved ?? 0) > 0 && (
+        {(summary.unresolved_authorable?.length ?? 0) > 0 && (
           <p className="hint-line">
-            ⚠ {summary.unresolved} concept(s) still have no term id — any method for them binds by
-            name, which is weaker. Reconcile fixes it; note that Apply is in memory, so reconcile
-            and deploy want to happen in the same session.
+            ⚠ {summary.unresolved_authorable.length} authorable concept(s) still have no term id —
+            their methods bind by name ({summary.unresolved_authorable.join(', ')}). Reconcile and
+            Stamp ids fixes it; the stamp is in memory, so reconcile and deploy want the same
+            session.
+          </p>
+        )}
+        {(summary.unresolved_authorable?.length ?? 0) === 0
+          && (summary.unresolved_link_governed?.length ?? 0) > 0 && (
+          <p className="notes">
+            {summary.unresolved_link_governed.length} unresolved concept(s) are link-governed —
+            no method affected ({summary.unresolved_link_governed.join(', ')}).
           </p>
         )}
       </section>

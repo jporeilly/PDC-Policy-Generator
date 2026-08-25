@@ -1,12 +1,18 @@
 # Version
 
-**1.10.17** - 2026-08-24
+**1.11.0** - 2026-08-25
 
-The efficacy release: every authored seed judged against the stored
-profile samples identification actually scores with (38 live / 0 dead on
-the Arizona estate at birth), read-back verdicts keyed by (table, column),
-the link-governed verdict and Blend column from the walk's catches, and a
-marquee for the installer's delete phase.
+The P-batch: everything the 2026-08-25 Policy walk-half logged (P1-P7 in
+the Glossary repo's SPEC-BACKLOG). Single-token column hints ANCHOR so a
+'status' dictionary can no longer claim account_status; vocabulary twins
+are named at Author time with mapping-only advice; a never-started import
+is diagnosed as such instead of inventing a parse failure; deploy narrates
+its phases; the unresolved-id banners name their concepts and only go
+amber when a method is affected; efficacy tells the truth about
+JSON-nested sources; and the installer's delete phase shows real progress
+(the Glossary's field-verified stepped bar, ported).
+
+Previously - **1.10.17** - 2026-08-24 (the efficacy release)
 
 Previously - **1.10.16** — 2026-08-23
 

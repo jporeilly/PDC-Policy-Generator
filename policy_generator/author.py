@@ -59,13 +59,21 @@ def _now_iso():
 def column_name_regex(sources):
     """Case-insensitive column-name hint from the concept's physical sources
     ('schema.table.column' / 'bucket/folder/file'), e.g. ['x.members.mbr_no']
-    -> (?i)(mbr_?no). Returns None when no usable names exist."""
+    -> (?i)(mbr_?no). Returns None when no usable names exist.
+
+    P6 (2026-08-25 walk, the cross-fire verdict): a SINGLE-token name
+    anchors — (?i)(^status$) — because a substring 'status' hint "agrees"
+    with every column CONTAINING the token (account_status, system_status,
+    pump_status), which is how the four generic Status dictionaries claimed
+    the whole family despite the 0.5/0.5 tightening. Multi-token names keep
+    the substring form: account_?status can only ever match its own column,
+    and prefixed variants (tbl_account_status) still deserve the claim."""
     parts = []
     for src in sources or []:
         name = str(src).replace("/", ".").split(".")[-1].strip()
         toks = [re.escape(t) for t in re.split(r"[^A-Za-z0-9]+", name) if t]
         if toks:
-            p = "_?".join(toks)
+            p = "_?".join(toks) if len(toks) > 1 else f"^{toks[0]}$"
             if p not in parts:
                 parts.append(p)
     return "(?i)(" + "|".join(parts) + ")" if parts else None
@@ -350,12 +358,48 @@ def author(reg: dict, prefix: str = None) -> dict:
     for pat in patterns:
         rx = ((pat["rule"].get("regexMatch") or {}).get("regex") or [None])[0]
         if rx:
-            by_regex.setdefault(rx, []).append(pat["term"])
-    ambiguous = [{"regex": rx, "terms": sorted(t)}
-                 for rx, t in by_regex.items() if len(t) > 1]
+            by_regex.setdefault(rx, []).append(pat)
+    # P1 (2026-08-25 walk): a shape shared ONLY by name-anchored methods is
+    # safe BY CONSTRUCTION — their 0.5/0.5 blend against the gate means the
+    # column name must agree, so the shared sanity half identifies nothing on
+    # its own. Rendering those red trained the steward to ignore the warning
+    # (W13's rule). Profiled claimants stay red: their regexScore weight alone
+    # crosses the gate, so the shape really is the claim.
+    ambiguous, anchored = [], []
+    for rx, pats in by_regex.items():
+        if len(pats) < 2:
+            continue
+        entry = {"regex": rx, "terms": sorted(p["term"] for p in pats)}
+        if all(str(p.get("evidence") or "") == "name-anchored" for p in pats):
+            anchored.append(entry)
+        else:
+            ambiguous.append(entry)
+
+    # P6 doctrine: table-qualified twins — dictionaries whose column is the
+    # SAME bare generic token — are undetectable distinctly by construction:
+    # the name cannot disambiguate them and PDC hints carry no table scope,
+    # so whenever their vocabularies overlap in the DATA they claim each
+    # other's columns (the walk proved it: account_alerts.status and
+    # tiered_rates.status came back wearing both terms). Keyed on the bare
+    # token, NOT on seed-value overlap — the seeds can differ while the live
+    # columns still overlap, which is exactly what happened. The steward
+    # should hear "declare these mapping-only" HERE, not from a read-back
+    # probe; their term↔column links already govern the right tables.
+    by_token = {}
+    for d in dictionaries:
+        hint = ((d["rule"].get("metadataHints") or {}).get("aliases")
+                or [{}])[0].get("nameRegex") or ""
+        bare = re.fullmatch(r"\(\?i\)\((\^[a-z0-9]+\$)\)", hint)
+        if bare:
+            by_token.setdefault(bare.group(1).strip("^$"), []).append(d["term"])
+    twins = [{"term": t, "column": tok,
+              "partners": sorted(x for x in terms if x != t)}
+             for tok, terms in by_token.items() if len(terms) > 1
+             for t in sorted(terms)]
 
     return {"patterns": patterns, "dictionaries": dictionaries, "skipped": skipped,
-            "ambiguous_shapes": ambiguous,
+            "ambiguous_shapes": ambiguous, "anchored_shapes": anchored,
+            "vocabulary_twins": twins,
             "glossary": reg.get("glossary"), "prefix": prefix}
 
 

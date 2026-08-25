@@ -63,6 +63,10 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
   const [look, setLook] = useState('')          // table-name search
   const [hits, setHits] = useState(null)        // {count, entities}
   const [scopeMsg, setScopeMsg] = useState(null) // registry-scope result line
+  // P3: the live deploy's phase + counter, polled while the POST runs —
+  // "Working…" hid a four-phase pipeline (field: "would be good to have a
+  // progress indicator when deploying")
+  const [prog, setProg] = useState(null)
 
   // The guard returns 409 with the terms named. Offer the override where the
   // refusal appears, so the steward can act on it without reading API docs —
@@ -84,6 +88,16 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
       'stays scoped to its name prefix so Retire can always clean it up.')) return
     setBusy(true)
     setError(null)
+    let poll = null
+    if (!dryRun) {
+      poll = setInterval(async () => {
+        try {
+          const r = await fetch('/api/pdc/deploy/progress')
+          const d = await r.json()
+          setProg(d.progress)
+        } catch { /* transient — next tick retries */ }
+      }, 1000)
+    }
     try {
       const body = await post('/api/pdc/deploy', {
         prefix: prefix || null, dry_run: dryRun,
@@ -95,6 +109,8 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
       setError(err.message)
       if (err.message.includes('expired')) onPdc(null)
     } finally {
+      if (poll) clearInterval(poll)
+      setProg(null)
       setBusy(false)
     }
   }
@@ -197,6 +213,12 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
             <button className="primary" onClick={() => run(false)} disabled={busy || !pdc}>
               🚀 Deploy
             </button>
+            {busy && prog && (
+              <span className="notes">
+                {prog.detail || prog.phase}
+                {prog.total != null && <> · {prog.done}/{prog.total}</>}
+              </span>
+            )}
           </div>
         </header>
         <p className="hint-line">
@@ -206,11 +228,22 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
           (the importer rewrites ids it cannot resolve). Dry-run shows the create/update
           plan without touching PDC.
         </p>
-        {summary.unresolved > 0 && (
+        {/* P2/P4: the banner names its concepts and only goes amber when a
+            METHOD is affected — a mapping-only concept with no term id authors
+            nothing, so name-binding cannot happen and the remedy is moot. */}
+        {(summary.unresolved_authorable?.length ?? 0) > 0 && (
           <p className="summary">
-            <span className="badge warning" title="Run Reconcile and apply the found ids first — deploy binds terms by id">
-              ⚠ {summary.unresolved} concept(s) still have no term id — those methods bind by name only
+            <span className="badge warning" title="Run Reconcile and click Stamp ids first — the reconcile rows showing a found id are not applied until stamped">
+              ⚠ {summary.unresolved_authorable.length} authorable concept(s) have no term id — their
+              methods bind by name: {summary.unresolved_authorable.join(', ')}. Reconcile, then Stamp ids.
             </span>
+          </p>
+        )}
+        {(summary.unresolved_authorable?.length ?? 0) === 0
+          && (summary.unresolved_link_governed?.length ?? 0) > 0 && (
+          <p className="notes">
+            {summary.unresolved_link_governed.length} unresolved concept(s) are link-governed
+            (mapping-only) — no method is affected: {summary.unresolved_link_governed.join(', ')}.
           </p>
         )}
         {error && (
@@ -253,6 +286,14 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
             error never names the file — so the deploy table showed a wall of
             "not found" with no cause. The first absent method of that kind IS
             where it stopped. */}
+        {/* P5: a worker that never reached a terminal state read NOTHING — a
+            different failure from a parse-abandoned archive, and the walk's
+            VM proved the misdiagnosis costs real hunting time. */}
+        {result?.workers?.filter((w) => w.never_ran).map((w) => (
+          <div className="error" key={`nr-${w.kind}`}>
+            <b>{w.kind} import never started.</b> {w.why}
+          </div>
+        ))}
         {result?.workers?.filter((w) => w.stopped_at).map((w) => (
           <div className="error" key={`stop-${w.kind}`}>
             <b>{w.kind} import stopped at “{w.stopped_at}”.</b>{' '}
@@ -315,7 +356,9 @@ export default function DeployPage({ summary, pdc, onPdc, onNavigate }) {
                         </span>
                       )}
                       {!isPlan && !r.imported && (
-                        <span className="badge serious" title={r.error ?? ''}>✋ not found after import</span>
+                        r.never_ran
+                          ? <span className="badge neutral" title="The import worker never processed the archive — nothing was read; redeploy once the worker queue is healthy.">◌ import never ran</span>
+                          : <span className="badge serious" title={r.error ?? ''}>✋ not found after import</span>
                       )}
                     </td>
                   </tr>

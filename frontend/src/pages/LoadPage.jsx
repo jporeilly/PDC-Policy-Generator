@@ -364,10 +364,19 @@ export function SummaryCard({ summary }) {
           </div>
         ))}
       </div>
-      {(summary.unresolved ?? 0) > 0 && (
+      {(summary.unresolved_authorable?.length ?? 0) > 0 && (
         <p className="hint-line">
-          ⚠ {summary.unresolved} concept(s) have no term id yet — methods for them bind by
-          name only, which is weaker. Import the glossary into PDC, then Reconcile.
+          ⚠ {summary.unresolved_authorable.length} authorable concept(s) have no term id yet —
+          their methods bind by name only, which is weaker
+          ({summary.unresolved_authorable.join(', ')}). Import the glossary into PDC, then
+          Reconcile and Stamp ids.
+        </p>
+      )}
+      {(summary.unresolved_authorable?.length ?? 0) === 0
+        && (summary.unresolved_link_governed?.length ?? 0) > 0 && (
+        <p className="hint-line">
+          {summary.unresolved_link_governed.length} unresolved concept(s) are link-governed
+          (mapping-only) — no method is affected ({summary.unresolved_link_governed.join(', ')}).
         </p>
       )}
     </section>

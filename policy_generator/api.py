@@ -48,7 +48,16 @@ app = FastAPI(
 _state = {"reg": None, "name": None,
           "path": None,           # abs path when loaded by path (None = uploaded)
           "pdc": None,            # {base, version, verify_tls, token}
-          "reconcile": None}      # last reconcile rows (for apply)
+          "reconcile": None,      # last reconcile rows (for apply)
+          # P3: the live deploy's phase + counter, polled by the Deploy page
+          # while the POST is in flight ("would be good to have a progress
+          # indicator when deploying") — {phase, detail, done, total} or None
+          "deploy_progress": None}
+
+
+def _dprog(phase, detail="", done=None, total=None):
+    _state["deploy_progress"] = {"phase": phase, "detail": detail,
+                                 "done": done, "total": total}
 
 
 # --------------------------------------------------------------------------- #
@@ -64,6 +73,10 @@ class RegistrySummary(BaseModel):
     off_vocabulary: int
     file: str | None = None
     unresolved: int | None = None
+    # P2: the split that decides the banner's colour — name-binding is only a
+    # risk for concepts that actually author a method
+    unresolved_authorable: list[str] | None = None
+    unresolved_link_governed: list[str] | None = None
     applied: int | None = None
 
 
@@ -227,6 +240,9 @@ def _summary_payload() -> RegistrySummary:
     s = registry_mod.summary(_state["reg"])
     s["file"] = _state["name"]
     s["unresolved"] = len(registry_mod.unresolved_terms(_state["reg"]))
+    det = registry_mod.unresolved_detail(_state["reg"])
+    s["unresolved_authorable"] = det["authorable"][:10]
+    s["unresolved_link_governed"] = det["link_governed"][:10]
     return RegistrySummary(**s)
 
 
@@ -354,6 +370,8 @@ def api_preview(body: PrefixRequest | None = None) -> dict:
     return {
         "prefix": art["prefix"],
         "ambiguous_shapes": art.get("ambiguous_shapes") or [],
+        "anchored_shapes": art.get("anchored_shapes") or [],
+        "vocabulary_twins": art.get("vocabulary_twins") or [],
         "patterns": [_pat(p) for p in art["patterns"]],
         "dictionaries": [_dic(d) for d in art["dictionaries"]],
         "skipped": [dict(s, bucket=("mapping_only" if s.get("intent") == "mapping_only"
@@ -711,9 +729,11 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
     workers = []
     try:
         if art["patterns"]:
+            _dprog("import", f"uploading {len(art['patterns'])} Data Pattern(s)")
             w = _with_pdc(p, lambda tok: pdc_mod.upload_import(
                 p["base"], tok, "DataPattern", "patterns-import.zip",
                 author_mod.patterns_zip_bytes(art), verify_tls=p["verify_tls"]))
+            _dprog("import", "waiting on PDC's Data Pattern import worker")
             st = _with_pdc(p, lambda tok: pdc_mod.wait_worker(
                 p["base"], tok, w.get("_id"),
                 verify_tls=p["verify_tls"], timeout=body.wait_seconds))
@@ -721,9 +741,11 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
                             "workerName": w.get("workerName"), "status": st.get("status"),
                             "report": _worker_report(st)})
         if art["dictionaries"]:
+            _dprog("import", f"uploading {len(art['dictionaries'])} Dictionar(y/ies)")
             w = _with_pdc(p, lambda tok: pdc_mod.upload_import(
                 p["base"], tok, "Dictionary", "dictionaries-import.zip",
                 author_mod.dictionaries_zip_bytes(art), verify_tls=p["verify_tls"]))
+            _dprog("import", "waiting on PDC's Dictionary import worker")
             st = _with_pdc(p, lambda tok: pdc_mod.wait_worker(
                 p["base"], tok, w.get("_id"),
                 verify_tls=p["verify_tls"], timeout=body.wait_seconds))
@@ -731,19 +753,25 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
                             "workerName": w.get("workerName"), "status": st.get("status"),
                             "report": _worker_report(st)})
     except HTTPException:
+        _state["deploy_progress"] = None
         raise
     except Exception as e:
+        _state["deploy_progress"] = None
         raise HTTPException(status_code=502, detail=f"import upload failed: {e}")
 
     try:
+        _dprog("verify", "listing what actually landed in PDC")
         live = _live_index(p, prefix)
     except HTTPException:
+        _state["deploy_progress"] = None
         raise
     except Exception as e:
+        _state["deploy_progress"] = None
         raise HTTPException(status_code=502, detail=f"post-import verify failed: {e}")
 
     rows = []
-    for e in expected:
+    for i, e in enumerate(expected):
+        _dprog("bind", "verifying + re-stamping term ids", done=i, total=len(expected))
         m = live.get((e["kind"], e["name"]))
         row = {"kind": e["kind"], "name": e["name"], "term": e["term"],
                "term_id": e.get("term_id"), "imported": m is not None,
@@ -776,13 +804,45 @@ def api_pdc_deploy(body: DeployRequest | None = None) -> dict:
         absent = [r["name"] for r in rows if r["kind"] == kind and not r["imported"]]
         if not absent:
             continue
+        # P5 (field, 2026-08-25): the stopped-at inference assumes the worker
+        # actually RAN. A worker still queued (ACCEPTED) or mid-flight at the
+        # wait timeout read nothing and abandoned nothing — the walk's VM had
+        # wedged manager consumers, and this block sent the steward hunting a
+        # parse bug in "Arizona Segment ID" that never existed. A non-terminal
+        # status is its own diagnosis and SKIPS the inference.
+        status = str(w.get("status") or "")
+        if status not in ("COMPLETED", "FAILED", "SUCCESS"):
+            w["never_ran"] = True
+            w["why"] = (("PDC never started processing this import — worker "
+                         f"{w.get('worker_id')} was still {status or 'queued'} when the "
+                         "wait timed out. Its manager consumer "
+                         f"({w.get('workerName') or kind}) is not picking up work: "
+                         "check the VM's containers, then redeploy (the retry is safe "
+                         "— methods carry deterministic ids).")
+                        if status in ("", "ACCEPTED", "None")
+                        else (f"the import worker was still {status} when the wait "
+                              "timed out — give PDC longer (wait_seconds) or check "
+                              "the worker before concluding anything failed."))
+            for r in rows:
+                if r["kind"] == kind and not r["imported"]:
+                    r["never_ran"] = True
+            continue
         w["stopped_at"] = absent[0]
         w["lost_after"] = len(absent) - 1
         exc = ((w.get("report") or {}).get("ERROR") or {}).get("event", {}).get("exception")
         if exc:
             w["exception"] = str(exc).split("\n")[0][:300]
+    _state["deploy_progress"] = None
     return {"prefix": prefix, "dry_run": False, "workers": workers,
             "rows": rows, "counts": counts}
+
+
+@app.get("/api/pdc/deploy/progress")
+def api_deploy_progress() -> dict:
+    """P3: the live deploy's current phase + counter — polled by the Deploy
+    page while its POST is in flight, so 'Working…' becomes 'waiting on PDC's
+    Dictionary import worker' / 're-stamping 31/49'. Null when idle."""
+    return {"progress": _state.get("deploy_progress")}
 
 
 @app.post("/api/pdc/identify")
@@ -1000,14 +1060,22 @@ def api_pdc_efficacy(body: PrefixRequest | None = None) -> dict:
                 if isinstance(c, dict)}
 
     def _srcs(term):
-        out = []
+        """(resolvable, nested): resolvable = (table_or_file, column) pairs the
+        profile lookup can serve; nested = document-nested paths (JSON nodes,
+        public.<file>.json.<node>.<col>) that exist in the Registry but cannot
+        map to a profiled column. P7 (2026-08-25 walk): these were silently
+        DROPPED, so four methods whose only homes are JSON snapshots reported
+        "no physical source in the Registry" — a registry gap that isn't."""
+        out, nested = [], []
         for s in (concepts.get(term) or {}).get("sources") or []:
             parts = [x.strip() for x in str(s).split(".")]
             if len(parts) == 3:
                 out.append((parts[1], parts[2]))
             elif len(parts) == 4 and parts[2].lower() == "csv":
                 out.append((f"{parts[1]}.csv", parts[3]))
-        return out
+            elif "json" in [p.lower() for p in parts]:
+                nested.append(str(s))
+        return out, nested
 
     methods = ([{"kind": "pattern", "term": m["term"], "name": m["rule"]["name"],
                  "regex": (m["rule"].get("regexMatch") or {}).get("regex", [None])[0]}
@@ -1017,7 +1085,7 @@ def api_pdc_efficacy(body: PrefixRequest | None = None) -> dict:
                   for m in art["dictionaries"]])
 
     # resolve each needed table/file ONCE, pull its stored profile once
-    needed = sorted({t for m in methods for (t, _c) in _srcs(m["term"])})
+    needed = sorted({t for m in methods for (t, _c) in _srcs(m["term"])[0]})
     profiles, missing_parents = {}, set()
     for t in needed:
         types = ["FILE"] if t.lower().endswith(".csv") else ["TABLE", "VIEW"]
@@ -1046,10 +1114,16 @@ def api_pdc_efficacy(body: PrefixRequest | None = None) -> dict:
 
     rows = []
     for m in methods:
-        srcs = _srcs(m["term"])
+        srcs, nested = _srcs(m["term"])
         if not srcs:
+            detail = ("document-nested source (JSON path) — the Registry knows "
+                      f"where this lives ({nested[0]}"
+                      + (f" +{len(nested) - 1} more" if len(nested) > 1 else "")
+                      + ") but a nested JSON node is not a profiled column, so "
+                      "there is nothing to score the seed against"
+                      if nested else "no physical source in the Registry")
             rows.append({"method": m["name"], "kind": m["kind"], "term": m["term"],
-                         "verdict": "unresolved", "detail": "no physical source in the Registry"})
+                         "verdict": "unresolved", "detail": detail})
             continue
         best = None
         for (t, col) in srcs:

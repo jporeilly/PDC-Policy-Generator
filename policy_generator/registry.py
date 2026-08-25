@@ -131,6 +131,24 @@ def unresolved_terms(reg: dict) -> list:
             if isinstance(c, dict) and not c.get("term_id")]
 
 
+def unresolved_detail(reg: dict) -> dict:
+    """P2 (2026-08-25 walk): the no-term-id banner prescribed import+reconcile
+    while the one unresolved concept was mapping-only — no method existed to
+    bind weakly, and the steward had to discover the remedy was moot. Split
+    the population: `authorable` concepts really do bind by name (act);
+    `link_governed` ones author no method (nothing affected)."""
+    authorable, link_governed = [], []
+    for c in reg.get("concepts", []):
+        if not isinstance(c, dict) or c.get("term_id"):
+            continue
+        name = c.get("term_name")
+        if c.get("detect") and str(c.get("detection_intent") or "") != "mapping_only":
+            authorable.append(name)
+        else:
+            link_governed.append(name)
+    return {"authorable": authorable, "link_governed": link_governed}
+
+
 def write_seed_request(dir_path: str, registry_file: str, terms: list) -> str:
     """Write seed-request.json into the directory the Registry was loaded
     from (the shared registries/ folder in the PDC-Demo layout) so the

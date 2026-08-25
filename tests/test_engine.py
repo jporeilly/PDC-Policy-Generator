@@ -168,3 +168,81 @@ class TestAuthor:
                 (pat_name,) = pz.namelist()
                 rule = json.loads(pz.read(pat_name))
                 assert isinstance(rule, dict)        # PDC Gson-parses per file: object, never array
+
+class TestPBatch:
+    """The 2026-08-25 walk's P-log fixes (docs/SPEC-BACKLOG in the Glossary
+       repo): P6 hint anchoring, P1 warning split, P2 unresolved split, P7
+       nested-source honesty."""
+
+    def test_p6_single_token_hints_anchor(self):
+        from policy_generator.author import column_name_regex
+        assert column_name_regex(["awc.tiered_rates.status"]) == "(?i)(^status$)"
+        assert column_name_regex(["awc.sites.county"]) == "(?i)(^county$)"
+        # multi-token names keep the substring claim (prefixed variants exist)
+        assert column_name_regex(["awc.customers.account_status"]) \
+            == "(?i)(account_?status)"
+        # mixed sources: one anchored, one substring, deduped
+        rx = column_name_regex(["a.t.status", "a.u.pump_status"])
+        assert rx == "(?i)(^status$|pump_?status)"
+
+    def test_p1_all_anchored_shared_shapes_split_from_ambiguous(self):
+        from policy_generator import author as A
+        reg = {
+            "schema": "classification-registry/1", "glossary": "G",
+            "tag_vocabulary": {"allow_list": ["pii"]},
+            "concepts": [
+                {"term_name": "Lead (ppb)", "term_id": "t1", "tags": ["pii"],
+                 "sources": ["a.q.lead_ppb"],
+                 "detect": [{"type": "pattern", "regex": "^-?[0-9]+$",
+                             "source": "name-anchored", "identity": "column_name"}]},
+                {"term_name": "Copper (ppm)", "term_id": "t2", "tags": ["pii"],
+                 "sources": ["a.q.copper_ppm"],
+                 "detect": [{"type": "pattern", "regex": "^-?[0-9]+$",
+                             "source": "name-anchored", "identity": "column_name"}]},
+                {"term_name": "Billing ZIP", "term_id": "t3", "tags": ["pii"],
+                 "sources": ["a.c.billing_zip"],
+                 "detect": [{"type": "pattern", "regex": "^\d{5}$"}]},
+                {"term_name": "Service ZIP", "term_id": "t4", "tags": ["pii"],
+                 "sources": ["a.c.service_zip"],
+                 "detect": [{"type": "pattern", "regex": "^\d{5}$"}]},
+            ]}
+        art = A.author(reg, prefix="T")
+        anchored = {a["regex"] for a in art["anchored_shapes"]}
+        ambiguous = {a["regex"] for a in art["ambiguous_shapes"]}
+        assert "^-?[0-9]+$" in anchored, "all-name-anchored claimants are the neutral line"
+        assert "^\d{5}$" in ambiguous, \
+            "profiled claimants keep the red warning — their regex weight alone crosses the gate"
+
+    def test_p6_vocabulary_twins_named(self):
+        from policy_generator import author as A
+        vals = ["Active", "Inactive", "Suspended"]
+        reg = {
+            "schema": "classification-registry/1", "glossary": "G",
+            "tag_vocabulary": {"allow_list": ["pii"]},
+            "concepts": [
+                {"term_name": "Status (Alerts)", "term_id": "t1", "tags": ["pii"],
+                 "sources": ["a.account_alerts.status"],
+                 "detect": [{"type": "dictionary", "values": vals}]},
+                {"term_name": "Status (Rates)", "term_id": "t2", "tags": ["pii"],
+                 "sources": ["a.tiered_rates.status"],
+                 "detect": [{"type": "dictionary", "values": vals}]},
+            ]}
+        art = A.author(reg, prefix="T")
+        twins = {t["term"]: t for t in art["vocabulary_twins"]}
+        assert set(twins) == {"Status (Alerts)", "Status (Rates)"}, art["vocabulary_twins"]
+        assert twins["Status (Alerts)"]["partners"] == ["Status (Rates)"]
+        assert twins["Status (Alerts)"]["column"] == "status"
+
+    def test_p2_unresolved_split(self):
+        from policy_generator import registry as R
+        reg = {"concepts": [
+            {"term_name": "Authored NoId", "term_id": None,
+             "detect": [{"type": "pattern", "regex": "^x$"}]},
+            {"term_name": "MappingOnly NoId", "term_id": None, "detect": [],
+             "detection_intent": "mapping_only"},
+            {"term_name": "LinkGoverned NoId", "term_id": None, "detect": []},
+            {"term_name": "Fine", "term_id": "t-1", "detect": []},
+        ]}
+        d = R.unresolved_detail(reg)
+        assert d["authorable"] == ["Authored NoId"]
+        assert set(d["link_governed"]) == {"MappingOnly NoId", "LinkGoverned NoId"}

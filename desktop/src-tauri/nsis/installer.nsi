@@ -670,37 +670,77 @@ Section "-WebView2"
 SectionEnd
 
 ; ---------------------------------------------------------------------------
-; Marquee during the delete phases (spec backlog 12). NSIS weights its gauge
-; almost entirely by extraction bytes, so removing the old vendored Python
-; tree (thousands of files, most of an upgrade's wall time) leaves the bar
-; parked near 0% and the install reads as a hang - field-caught twice,
-; 2026-08-23, with a screenshot. A determinate bar cannot be honest about a
-; phase NSIS gives no weight, so the bar becomes a MARQUEE (barber pole)
-; while old files delete and returns to normal for extraction, whose byte
-; weighting is accurate. Degrades harmlessly: if the control lookup fails,
-; the bar simply stays as it was.
-!define /ifndef PBS_MARQUEE 0x08
-!define /ifndef PBM_SETMARQUEE 0x040A
+; DETERMINATE delete-phase progress (spec backlog 12, refined W20 — ported
+; from the Glossary Generator's template, field-verified on its 1.42.0
+; upgrade). NSIS weights its gauge almost entirely by extraction bytes, so
+; removing the old vendored Python tree left the bar parked and the install
+; read as a hang; the 1.10.17 marquee was honest but showed no progress
+; ("cant the progress bar just show the progress of the deletion"). The bulk
+; of the tree (site-packages, one directory per package) deletes ONE CHILD
+; PER INSTRUCTION while this macro drives the bar itself - count the
+; children, take the bar over (range 0..count), step it per deletion, hand
+; it back (range 0..30000, NSIS's own scale) when done. NSIS's own updates
+; during the phase are ~1 unit per instruction on the 30000 scale - they
+; round to no message at all, so the takeover holds. Degrades harmlessly: if
+; the control lookup fails the deletes still run, just without the bar.
+; Per-file "Delete file:" lines are the caller's job to silence
+; (SetDetailsPrint textonly) - the status line above the bar counts instead.
+!define /ifndef PBM_SETPOS     0x0402
+!define /ifndef PBM_SETRANGE32 0x0406
 
-!macro DeletePhaseMarquee ON
+!macro StepDeleteChildren DIR WHAT
+  Push $R4
+  Push $R5
+  Push $R6
   Push $R7
   Push $R9
   FindWindow $R9 "#32770" "" $HWNDPARENT
   GetDlgItem $R9 $R9 0x3EC              ; 1004 = the InstFiles progress bar
-  ${If} $R9 <> 0
-    System::Call 'user32::GetWindowLongW(p $R9, i -16) i .R7'
-    !if "${ON}" == "1"
-      IntOp $R7 $R7 | ${PBS_MARQUEE}
-      System::Call 'user32::SetWindowLongW(p $R9, i -16, i R7)'
-      SendMessage $R9 ${PBM_SETMARQUEE} 1 40
-    !else
-      SendMessage $R9 ${PBM_SETMARQUEE} 0 0
-      IntOp $R7 $R7 & 0xFFFFFFF7
-      System::Call 'user32::SetWindowLongW(p $R9, i -16, i R7)'
-    !endif
+  ; pass 1: count the children so the bar has an honest denominator
+  StrCpy $R6 0
+  FindFirst $R4 $R5 "${DIR}\*"
+  ${DoUntil} $R5 == ""
+    ${If} $R5 != "."
+    ${AndIf} $R5 != ".."
+      IntOp $R6 $R6 + 1
+    ${EndIf}
+    FindNext $R4 $R5
+  ${LoopUntil} $R5 == ""
+  FindClose $R4
+  ${If} $R6 > 0
+    ${If} $R9 <> 0
+      SendMessage $R9 ${PBM_SETRANGE32} 0 $R6
+      SendMessage $R9 ${PBM_SETPOS} 0 0
+    ${EndIf}
+    ; pass 2: delete child by child, stepping the bar and the status line
+    StrCpy $R7 0
+    FindFirst $R4 $R5 "${DIR}\*"
+    ${DoUntil} $R5 == ""
+      ${If} $R5 != "."
+      ${AndIf} $R5 != ".."
+        ${If} ${FileExists} "${DIR}\$R5\*.*"
+          RMDir /r "${DIR}\$R5"
+        ${Else}
+          Delete "${DIR}\$R5"
+        ${EndIf}
+        IntOp $R7 $R7 + 1
+        ${If} $R9 <> 0
+          SendMessage $R9 ${PBM_SETPOS} $R7 0
+        ${EndIf}
+        DetailPrint "${WHAT} ($R7 of $R6)..."
+      ${EndIf}
+      FindNext $R4 $R5
+    ${LoopUntil} $R5 == ""
+    FindClose $R4
+    ${If} $R9 <> 0
+      SendMessage $R9 ${PBM_SETRANGE32} 0 30000   ; hand the bar back to NSIS
+    ${EndIf}
   ${EndIf}
   Pop $R9
   Pop $R7
+  Pop $R6
+  Pop $R5
+  Pop $R4
 !macroend
 
 Section "-Install"
@@ -718,15 +758,17 @@ Section "-Install"
   ; adds and overwrites, so a dependency dropped between releases would linger
   ; and keep being importable. Left in place would make "what shipped" and
   ; "what is installed" quietly different.
-  !insertmacro DeletePhaseMarquee 1
-  DetailPrint "Removing the previous version's files (the bar resumes at extraction)..."
+  ; The bar shows real deletion progress (one step per old package) and the
+  ; per-file "Delete file:" torrent stays out of the details list - the log
+  ; records the phase in one line, the status line counts the steps (W20).
+  DetailPrint "Removing the previous version's files..."
+  SetDetailsPrint textonly
+  !insertmacro StepDeleteChildren "$INSTDIR\python\Lib\site-packages" "Removing the previous version's files"
   RMDir /r "$INSTDIR\python"
-  !insertmacro DeletePhaseMarquee 0
 
   ; Status line only for the extraction: the progress text at the top keeps
   ; moving, but 12,000 "Extract: ..." lines stay out of the log, which exists to
   ; show what the install DID, not every file it wrote.
-  SetDetailsPrint textonly
   DetailPrint "Installing application files (bundled Python and drivers)..."
 
   ; Copy main executable
@@ -914,9 +956,11 @@ Section Uninstall
 
   DetailPrint "Removing ${PRODUCTNAME} from $INSTDIR"
 
-  ; Delete the app directory and its content from disk
+  ; Delete the app directory and its content from disk - the python bulk
+  ; drives the bar itself (W20) and the per-file torrent stays out of the
+  ; details list
+  SetDetailsPrint textonly
   ; Copy main executable
-  !insertmacro DeletePhaseMarquee 1
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"
 
   ; Delete resources
@@ -959,11 +1003,12 @@ Section Uninstall
   ; app keeps no state under $INSTDIR (its one write lands beside the loaded
   ; Registry), so removing them wholesale is safe - the same rule the install
   ; section applies when it replaces \python.
+  !insertmacro StepDeleteChildren "$INSTDIR\python\Lib\site-packages" "Removing bundled Python"
   RMDir /r "$INSTDIR\python"
   RMDir /r "$INSTDIR\app"
   RMDir /r "$INSTDIR\provisioning"
   RMDir "$INSTDIR"
-  !insertmacro DeletePhaseMarquee 0
+  SetDetailsPrint both
 
   ; Remove shortcuts if not updating
   ${If} $UpdateMode <> 1

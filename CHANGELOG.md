@@ -1,5 +1,86 @@
 # Changelog
 
+## [1.11.0] - 2026-08-25
+
+The P-batch: every catch the clean walkthrough's Policy half logged
+(P1-P7, docs/SPEC-BACKLOG-20260821.md in the Glossary repo), fixed as one
+batch after the walk completed end to end.
+
+### Changed - single-token column hints anchor (P6 - the cross-fire fix)
+
+The read-back verdict: the four dictionaries minted from columns
+literally named "status" carried the substring hint (?i)(status), which
+"agrees" with every column CONTAINING the token - account_status,
+system_status, service_county picked up their generic siblings' terms
+despite the 0.5/0.5 tightening. A hint derived from a single-token
+column name now anchors - (?i)(^status$) - while multi-token names keep
+the substring form (account_?status can only match its own column, and
+prefixed variants still deserve the claim).
+
+### Added - vocabulary twins named at Author time, with the remedy (P6)
+
+Dictionaries whose column is the SAME bare token (Status x4 on this
+estate) are undetectable distinctly by construction: the name cannot
+disambiguate them and PDC hints carry no table scope, so overlapping
+live values make them claim each other's columns - proven on
+account_alerts.status <-> tiered_rates.status. The Author card now names
+each twin set and says the fix out loud: declare them Mapping-only on
+Review - their term links already govern the right tables. Keyed on the
+bare token, not seed-value overlap (the seeds differed; the columns
+overlapped anyway).
+
+### Changed - the shared-shape warning stops crying wolf (P1)
+
+A shape shared ONLY by name-anchored methods is safe by construction -
+the blend forces the column name to agree - and rendering the nine
+flipped measures red trained the steward to ignore red (W13's rule).
+They now render as a neutral "shared sanity shape - name-anchored, safe"
+line; the red warning is reserved for shapes whose claimants' regex
+weight alone crosses the gate (the ZIP pair keeps it honestly).
+
+### Fixed - a never-started import is not a parse failure (P5)
+
+Field, walk-blocking: both import workers sat ACCEPTED (VM consumers
+wedged) and the deploy reported "stopped at Arizona Segment ID... PDC
+abandons the archive at the first member it cannot parse" - a content
+bug that did not exist. A worker still non-terminal at the wait timeout
+now reports "import never started - the manager consumer is not picking
+up work; check the VM's containers, then redeploy (safe: deterministic
+ids)", the per-method rows read "import never ran", and the
+stopped-at-first-member inference only runs for workers that actually
+reached a terminal state.
+
+### Added - deploy narrates its phases (P3)
+
+"Working..." hid a four-phase pipeline. The Deploy page now polls the
+live phase + counter: uploading, waiting on PDC's import worker,
+verifying, "re-stamping term ids 31/49".
+
+### Changed - the unresolved-id banners name names and pick honest colours (P2, P4)
+
+"1 concept(s) still have no term id - those methods bind by name only"
+survived a reconcile that resolved the concept, and prescribed a remedy
+that was moot: the concept (Gis) is link-governed and authors no method.
+The Load/Deploy/Report banners now split the population - authorable
+concepts bind by name (amber, act: Reconcile then STAMP IDS - the rows
+showing a found id are not applied until stamped) vs link-governed ones
+(neutral, no method affected) - and name the concepts either way.
+
+### Fixed - efficacy tells the truth about JSON-nested sources (P7)
+
+Four methods whose only homes are nested JSON documents
+(public.<file>.json.<node>.<column>) reported "no physical source in the
+Registry" - a registry gap that is not there. The resolver now
+recognises document-nested paths and says what they are: known to the
+Registry, not resolvable to a profiled column, nothing to score against.
+
+### Changed - the installer's delete phase shows real progress (W20 port)
+
+The Glossary Generator's field-verified stepped delete bar replaces the
+marquee: the old vendored-Python tree deletes one package at a time
+while the installer drives the bar itself, and the per-file "Delete
+file:" torrent stays out of the details list.
+
 ## [1.10.17] - 2026-08-24
 
 ### Added - efficacy check: does each deployed method still match any DATA? (spec backlog 5)

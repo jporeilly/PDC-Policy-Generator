@@ -249,14 +249,46 @@ export default function AuthorPage({ summary }) {
         </p>
         {error && <div className="error">{error}</div>}
 
+        {/* P1: the neutral line for what is safe BY CONSTRUCTION — an
+            always-red warning trains stewards to ignore red. */}
+        {preview?.anchored_shapes?.length > 0 && (
+          <p className="summary">
+            Shared sanity shape — name-anchored, safe:{' '}
+            {preview.anchored_shapes.map((a) => (
+              <span key={a.regex} title={a.terms.join(', ')}>
+                <code>{a.regex}</code> ×{a.terms.length}{' '}
+              </span>
+            ))}
+            <span className="notes">
+              each method's 0.5/0.5 blend means the column name must agree, so the shared
+              shape identifies nothing on its own.
+            </span>
+          </p>
+        )}
+        {preview?.vocabulary_twins?.length > 0 && (
+          <div className="notice-warn">
+            <b>{preview.vocabulary_twins.length} vocabulary twin(s)</b> — dictionaries sharing a
+            vocabulary whose column is a bare generic name, so name AND values are
+            indistinguishable and PDC hints carry no table scope. These WILL claim each other's
+            columns; the fix is glossary-side: declare them <b>Mapping-only</b> on Review — their
+            term↔column links already govern the right tables.
+            <div>
+              {preview.vocabulary_twins.map((t) => (
+                <div className="notes" key={t.term}>
+                  <b>{t.term}</b> (column <code>{t.column}</code>) ↔ {t.partners.join(', ')}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {preview?.ambiguous_shapes?.length > 0 && (
           <div className="error" style={{ background: 'transparent' }}>
             <b>⚠ {preview.ambiguous_shapes.length} content shape(s) are claimed by more than one
-            method.</b> A regex that identifies several concepts identifies none of them — on this
-            estate one induced shape backed eight concepts and a free-text column came back bound
-            to all eight. Fix it glossary-side (a real shape per concept, or declare them
-            mapping-only); a Registry from 1.38.34 onward marks these name-anchored so the column
-            name has to agree.
+            method with the shape as the real claim.</b> A regex that identifies several concepts
+            identifies none of them — on this estate one induced shape backed eight concepts and a
+            free-text column came back bound to all eight. Fix it glossary-side (a real shape per
+            concept, or declare them mapping-only). Name-anchored claimants are exempt and listed
+            neutrally above.
             <div className="table-scroll" style={{ marginTop: '.5rem', maxHeight: '180px', overflowY: 'auto' }}>
               <table>
                 <thead><tr><th>Shape</th><th className="num">Methods</th><th>Claimed by</th></tr></thead>
