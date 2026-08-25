@@ -1003,7 +1003,13 @@ Section Uninstall
   ; app keeps no state under $INSTDIR (its one write lands beside the loaded
   ; Registry), so removing them wholesale is safe - the same rule the install
   ; section applies when it replaces \python.
-  !insertmacro StepDeleteChildren "$INSTDIR\python\Lib\site-packages" "Removing bundled Python"
+  ; No stepped bar here (field-caught on 1.11.0's uninstall: "the green bar
+  ; flashes far too quickly across" — install is fine). The per-file deletes
+  ; above have already emptied most of the tree, so the loop swept near-empty
+  ; folders in a blink; and uninstall progress weighs every instruction
+  ; equally, so the native bar already moves honestly across the per-file
+  ; torrent. The takeover earns its keep only on the INSTALL pre-clean, where
+  ; the whole old tree deletes under a byte-weighted bar that would not move.
   RMDir /r "$INSTDIR\python"
   RMDir /r "$INSTDIR\app"
   RMDir /r "$INSTDIR\provisioning"
