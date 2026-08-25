@@ -2347,7 +2347,7 @@ dependencies = [
 
 [[package]]
 name = "pdc-policy-desktop"
-version = "1.10.16"
+version = "1.11.0"
 dependencies = [
  "serde",
  "serde_json",

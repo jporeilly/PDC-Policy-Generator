@@ -477,8 +477,13 @@ def profiling_for_parent(base_url, token, parent_id, version="v3", verify_tls=Tr
         if not name:
             continue
         pinfo = it.get("profilingInfo") or it.get("profiling") or {}
-        sampling = pinfo.get("sampling") or pinfo.get("samples") or {}
-        raw = sampling.get("sample") if isinstance(sampling, dict) else sampling
+        # live PDC 11 serves the retained values as `sampleValues` (a plain
+        # string list at the top of profilingInfo); older shapes nested them
+        # under sampling.sample — accept all of them
+        raw = (pinfo.get("sampleValues") or pinfo.get("dataSampling")
+               or pinfo.get("sampling") or pinfo.get("samples") or [])
+        if isinstance(raw, dict):
+            raw = raw.get("sample") or raw.get("values") or []
         samples = []
         for s in raw or []:
             v = s.get("value") if isinstance(s, dict) else s
