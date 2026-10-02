@@ -1,6 +1,15 @@
 # Version
 
-**1.11.1** - 2026-08-25
+**1.11.2** - 2026-10-02
+
+Links work in the desktop app. A link that opens a new tab - the footer's
+API docs, anything in a rendered document - did nothing in the installed
+app: the shell's opener plugin cancelled the click and then refused its
+own request to open the page, because only the start-up screen was allowed
+to ask. The app's pages may now open web, mailto and tel links in the
+default handler, and nothing else. No change to the app itself.
+
+Previously - **1.11.1** - 2026-08-25
 
 P8, the catch from the 1.11.0 field walk: the stepped delete bar is
 install-pre-clean only. On uninstall the per-file deletes have already

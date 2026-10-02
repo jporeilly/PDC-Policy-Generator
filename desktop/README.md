@@ -62,6 +62,17 @@ installers are on one laptop, a Registry exported from the Glossary app
 appears on this app's Load page with nothing configured. The splash says how
 many Registry files it can see before the app even opens.
 
+## Links and new tabs
+
+The window is a webview on `http://127.0.0.1:<port>`, and two things about it
+do not show in a browser. A link that opens a new tab is cancelled by the
+opener plugin and handed to the system browser, which the shell must allow:
+`src-tauri/capabilities/served-app.json` grants the app's pages exactly that
+(web, mailto and tel links) and nothing else, while `default.json` keeps the
+shell's commands and the file opener for the splash. And `window.open()`
+returns null there, so UI code uses a link, never a second window.
+`tests/test_desktop_links.py` holds both in place.
+
 ## The installer
 
 `nsis/installer.nsi` adds a components page over Tauri's default template.
